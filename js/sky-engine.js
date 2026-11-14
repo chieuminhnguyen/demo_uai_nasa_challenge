@@ -42,6 +42,9 @@ class SpherexSkyEngine {
     this.flight = null;
     this.pulseStartTime = performance.now();
 
+    // Lớp ảnh Cutout FITS thực từ NASA IRSA (nếu đã tải thành công)
+    this.realFitsLayer = null;
+
     // Tương tác chuột (Pan & Zoom)
     this.isDragging = false;
     this.dragStart = { x: 0, y: 0, ra: 0, dec: 0 };
@@ -203,6 +206,38 @@ class SpherexSkyEngine {
 
   updateShader(partial) {
     Object.assign(this.shader, partial);
+    if (this.realFitsLayer && this.realFitsLayer.parsedFits && window.SpherexFitsParser) {
+      const dummy = document.createElement("canvas");
+      dummy.width = 96;
+      dummy.height = 96;
+      this.realFitsLayer.offCanvas = window.SpherexFitsParser.renderFitsToCanvas(
+        this.realFitsLayer.parsedFits,
+        dummy,
+        {
+          subtractZodi: this.shader.subtractZodi,
+          brightness: this.shader.brightness,
+          contrast: this.shader.contrast,
+          colormap: "infrared"
+        }
+      );
+    }
+  }
+
+  /**
+   * Gắn gói ảnh cắt FITS thật từ NASA IRSA lên đúng tọa độ (RA, Dec) trên bản đồ tương tác
+   */
+  setRealFitsCutout(parsedFits, offCanvas, ra, dec, cutoutSizeDeg = 0.1) {
+    if (!parsedFits || !offCanvas) {
+      this.realFitsLayer = null;
+      return;
+    }
+    this.realFitsLayer = {
+      parsedFits,
+      offCanvas,
+      ra,
+      dec,
+      cutoutSizeDeg
+    };
   }
 
   _initEvents() {
@@ -362,6 +397,11 @@ class SpherexSkyEngine {
     // 4. Vẽ các ngôi sao nền (biến thiên độ sáng theo bước sóng hồng ngoại & Contrast)
     this._drawStars(ctx, w, h, wlNorm);
 
+    // 4B. Vẽ Gói Ảnh Cắt FITS Thật từ NASA IRSA (nếu có ở tọa độ mục tiêu)
+    if (this.realFitsLayer && this.realFitsLayer.offCanvas) {
+      this._drawRealFitsStamp(ctx);
+    }
+
     // 5. Nếu dữ liệu có cờ lỗi Tia vũ trụ (Cosmic Ray Flag), vẽ vệt tia vũ trụ để minh họa trực quan
     if (this.target && this.target.qualityFlag === "COSMIC_RAY_WARN") {
       this._drawCosmicRayArtifact(ctx);
@@ -507,6 +547,49 @@ class SpherexSkyEngine {
     ctx.fillStyle = "#fda4af";
     ctx.font = "bold 10px 'JetBrains Mono', monospace";
     ctx.fillText("⚠️ COSMIC RAY ARTIFACT (FLAG 0x0010)", p.x - 24, p.y - 23);
+    ctx.restore();
+  }
+
+  /**
+   * Vẽ trực tiếp ma trận điểm ảnh FITS thật của NASA SPHEREx lên bản đồ tại tọa độ mục tiêu
+   */
+  _drawRealFitsStamp(ctx) {
+    const layer = this.realFitsLayer;
+    const p = this.project(layer.ra, layer.dec);
+    const stampPx = Math.max(44, Math.min(1200, layer.cutoutSizeDeg * p.scale));
+    if (
+      p.x + stampPx / 2 < 0 ||
+      p.x - stampPx / 2 > this.width ||
+      p.y + stampPx / 2 < 0 ||
+      p.y - stampPx / 2 > this.height
+    ) {
+      return;
+    }
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = 0.92;
+    const x0 = p.x - stampPx / 2;
+    const y0 = p.y - stampPx / 2;
+    ctx.drawImage(layer.offCanvas, x0, y0, stampPx, stampPx);
+
+    // Khung viền đánh dấu vùng FITS Cutout thật từ NASA IRSA
+    ctx.globalAlpha = 1.0;
+    ctx.strokeStyle = "rgba(34, 197, 94, 0.85)";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 3]);
+    ctx.strokeRect(x0, y0, stampPx, stampPx);
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = "rgba(6, 78, 59, 0.88)";
+    ctx.fillRect(x0, y0 - 18, Math.min(stampPx, 240), 17);
+    ctx.fillStyle = "#86efac";
+    ctx.font = "bold 10px 'JetBrains Mono', Consolas, monospace";
+    ctx.fillText(
+      `🛰️ LIVE IRSA FITS (D${layer.parsedFits.detector} • ${layer.parsedFits.width}×${layer.parsedFits.height}px)`,
+      x0 + 5,
+      y0 - 6
+    );
     ctx.restore();
   }
 

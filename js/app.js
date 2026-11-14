@@ -16,6 +16,17 @@
   let aladinInstance = null;
   let isAladinMode = false;
 
+  // Trạng thái dữ liệu FITS thật từ NASA/IPAC IRSA
+  let irsaState = {
+    siaRows: [],
+    selectedRow: null,
+    parsedFits: null,
+    queryRa: 56.8392,
+    queryDec: 11.9644,
+    cutoutSize: 0.1,
+    requestId: 0
+  };
+
   // DOM Elements
   const dom = {};
 
@@ -96,6 +107,9 @@
     dom.cutoutPreviewCanvas = document.getElementById("cutoutPreviewCanvas");
     dom.btnDownloadFits = document.getElementById("btnDownloadFits");
     dom.btnDownloadPng = document.getElementById("btnDownloadPng");
+    dom.irsaLiveBadge = document.getElementById("irsaLiveBadge");
+    dom.irsaFrameCountBadge = document.getElementById("irsaFrameCountBadge");
+    dom.irsaFrameSelect = document.getElementById("irsaFrameSelect");
 
     // URL State Output (Output 3)
     dom.shareUrlInput = document.getElementById("shareUrlInput");
@@ -316,11 +330,226 @@
     // OUTPUT 2: VỚI HỆ THỐNG PHÍA SAU (Cutout + 6 lớp HDU FITS + 102 phổ)
     // =========================================================================
     updateInspectorHUD(matchedObj, ra, dec, fov);
+    fetchRealIrsaDataForTarget(ra, dec, fov, matchedObj);
 
     // =========================================================================
     // OUTPUT 3: VỚI NGƯỜI THỨ 3 (Debounced 300ms URL State Sync)
     // =========================================================================
     scheduleURLStateUpdate(ra, dec, fov, matchedObj.id);
+  }
+
+  /**
+   * TRUY VẤN DỮ LIỆU THẬT TỪ KHO LƯU TRỮ NASA/IPAC IRSA SPHEREx (SIAv2 + MULTI-EXTENSION FITS CUTOUT)
+   */
+  async function fetchRealIrsaDataForTarget(ra, dec, fov, matchedObj) {
+    if (!window.SpherexFitsParser) return;
+
+    const reqId = ++irsaState.requestId;
+    // Nếu thiên thể có chuyển động riêng lớn (như Barnard's Star), ưu tiên dùng tọa độ đã truyền tới kỷ nguyên SPHEREx 2025.9
+    const queryRa = matchedObj?.cached_cutout_query_center?.ra_deg ?? ra;
+    const queryDec = matchedObj?.cached_cutout_query_center?.dec_deg ?? dec;
+    const cutoutSize = Math.max(0.05, Math.min(0.25, matchedObj?.cached_cutout_query_center?.fov_deg || fov || 0.1));
+
+    irsaState.queryRa = queryRa;
+    irsaState.queryDec = queryDec;
+    irsaState.cutoutSize = cutoutSize;
+    irsaState.parsedFits = null;
+    skyEngine.setRealFitsCutout(null, null, ra, dec);
+
+    if (dom.irsaLiveBadge) {
+      dom.irsaLiveBadge.textContent = "🛰️ NASA IRSA SIAv2: Đang truy vấn kho SPHEREx DR1/QR3...";
+      dom.irsaLiveBadge.className = "sync-badge syncing";
+    }
+    if (dom.irsaFrameCountBadge) {
+      dom.irsaFrameCountBadge.textContent = "";
+    }
+    if (dom.irsaFrameSelect) {
+      dom.irsaFrameSelect.innerHTML = `<option value="">⏳ Đang tải danh mục quan sát thực từ irsa.ipac.caltech.edu...</option>`;
+    }
+
+    try {
+      const siaResp = await fetch(`/api/irsa/sia?ra=${queryRa}&dec=${queryDec}&radius=0.05`);
+      if (reqId !== irsaState.requestId) return;
+
+      if (!siaResp.ok) {
+        throw new Error(`HTTP ${siaResp.status}`);
+      }
+
+      const csvText = await siaResp.text();
+      if (reqId !== irsaState.requestId) return;
+
+      const rows = window.SpherexFitsParser.parseSiaCsv(csvText, queryRa, queryDec);
+      irsaState.siaRows = rows;
+
+      if (!rows.length) {
+        if (dom.irsaLiveBadge) {
+          dom.irsaLiveBadge.textContent = "⚠️ IRSA SIAv2: 0 frame tại tọa độ này (Đang hiển thị mô phỏng)";
+          dom.irsaLiveBadge.className = "sync-badge syncing";
+        }
+        if (dom.irsaFrameSelect) {
+          dom.irsaFrameSelect.innerHTML = `<option value="">Không tìm thấy frame SPHEREx DR1/QR3 tại tọa độ này</option>`;
+        }
+        return;
+      }
+
+      // Đếm phân bố theo Detector (D1..D6)
+      const detCounts = {};
+      rows.forEach((r) => {
+        detCounts[`D${r.detector}`] = (detCounts[`D${r.detector}`] || 0) + 1;
+      });
+      const detSummary = Object.entries(detCounts)
+        .map(([k, v]) => `${k}:${v}`)
+        .join(" ");
+
+      if (dom.irsaFrameCountBadge) {
+        dom.irsaFrameCountBadge.textContent = `${rows.length} Frames (${detSummary})`;
+      }
+
+      // Chọn frame ưu tiên theo recommended_detectors (VD: D5, D6 cho sao lùn nâu / sao chuyển động riêng lớn)
+      const prefDets = matchedObj?.recommended_detectors || [6, 5, 4, 3, 2, 1];
+      let bestIdx = 0;
+      for (const d of prefDets) {
+        const foundIdx = rows.findIndex((r) => r.detector === d);
+        if (foundIdx !== -1) {
+          bestIdx = foundIdx;
+          break;
+        }
+      }
+
+      // Đổ danh sách tối đa 60 frames gần tâm nhất vào dropdown để người dùng chuyển đổi
+      const displayRows = rows.slice(0, 60);
+      if (bestIdx >= 60) bestIdx = 0;
+
+      if (dom.irsaFrameSelect) {
+        dom.irsaFrameSelect.innerHTML = displayRows
+          .map(
+            (r, i) =>
+              `<option value="${i}" ${i === bestIdx ? "selected" : ""}>[D${r.detector} • ${r.wlMinUm}–${r.wlMaxUm}µm] ${
+                r.obs_date_iso
+              } (${r.collection.toUpperCase()} • Δ=${(r.distToTarget * 3600).toFixed(0)}")</option>`
+          )
+          .join("");
+      }
+
+      await loadAndRenderRealFitsFrame(displayRows[bestIdx], ra, dec, cutoutSize, reqId);
+    } catch (err) {
+      if (reqId !== irsaState.requestId) return;
+      if (dom.irsaLiveBadge) {
+        dom.irsaLiveBadge.textContent = "⚡ Chế độ Offline / Fallback (Chưa kết nối gateway IRSA)";
+        dom.irsaLiveBadge.className = "sync-badge syncing";
+      }
+    }
+  }
+
+  /**
+   * Tải gói cắt nhị phân Multi-Extension FITS (.fits) thật từ NASA IRSA IBE và giải mã 6 lớp HDU
+   */
+  async function loadAndRenderRealFitsFrame(row, targetRa, targetDec, cutoutSize, reqId) {
+    if (!row || !window.SpherexFitsParser) return;
+    irsaState.selectedRow = row;
+
+    if (dom.irsaLiveBadge) {
+      dom.irsaLiveBadge.textContent = `⏳ Đang tải & giải mã Binary FITS (D${row.detector} • ${row.obs_date_iso})...`;
+      dom.irsaLiveBadge.className = "sync-badge syncing";
+    }
+
+    try {
+      const cutoutUrl = `/api/irsa/cutout?access_url=${encodeURIComponent(row.access_url)}&ra=${irsaState.queryRa}&dec=${
+        irsaState.queryDec
+      }&size=${cutoutSize}&mode=compact`;
+
+      const resp = await fetch(cutoutUrl);
+      if (reqId && reqId !== irsaState.requestId) return;
+      if (!resp.ok) throw new Error(`Cutout HTTP ${resp.status}`);
+
+      const arrayBuffer = await resp.arrayBuffer();
+      if (reqId && reqId !== irsaState.requestId) return;
+
+      const parsed = window.SpherexFitsParser.parseMultiExtensionFits(arrayBuffer);
+      if (!parsed || !parsed.valid) {
+        throw new Error("Invalid FITS structure");
+      }
+
+      irsaState.parsedFits = parsed;
+
+      // Cập nhật toàn bộ thông số Telemetry trong Inspector HUD bằng dữ liệu FITS thật 100% của NASA
+      if (currentObject) {
+        currentObject.telemetry = {
+          obsTime: parsed.dateObs,
+          epoch: `${row.collection.toUpperCase()} (LIVE NASA FITS)`,
+          detectorArray: `Detector D${parsed.detector} (${parsed.wlMin}–${parsed.wlMax} µm)`,
+          imageFlux: parsed.centerPeakFlux,
+          medianFlux: parsed.medianFlux,
+          zodiFlux: parsed.meanZodi,
+          variance: parsed.medianVariance,
+          psfFwhm: parsed.psfFwhm,
+          snr: parsed.snr,
+          qualityFlag: parsed.qualityFlag,
+          qualityCode: parsed.centerFlagHex,
+          qualityMessage: parsed.qualityMessage
+        };
+      }
+
+      // Render ma trận điểm ảnh 32-bit float thật lên ô Cutout Preview và lên bản đồ chính
+      refreshRealFitsVisuals();
+
+      if (dom.irsaLiveBadge) {
+        dom.irsaLiveBadge.textContent = `🟢 LIVE NASA IRSA FITS (${parsed.width}×${parsed.height}px • D${parsed.detector})`;
+        dom.irsaLiveBadge.className = "sync-badge synced";
+      }
+    } catch (e) {
+      if (dom.irsaLiveBadge) {
+        dom.irsaLiveBadge.textContent = `⚠️ Không tải được FITS Cutout (${e.message})`;
+        dom.irsaLiveBadge.className = "sync-badge syncing";
+      }
+    }
+  }
+
+  /**
+   * Vẽ lại ảnh FITS thật và cập nhật số liệu HUD khi đổi Frame hoặc kéo thanh Brightness/Contrast/ZODI
+   */
+  function refreshRealFitsVisuals() {
+    const parsed = irsaState.parsedFits;
+    if (!parsed || !parsed.valid || !window.SpherexFitsParser) return;
+
+    const offCanvas = window.SpherexFitsParser.renderFitsToCanvas(parsed, dom.cutoutPreviewCanvas, {
+      subtractZodi: skyEngine.shader.subtractZodi,
+      brightness: skyEngine.shader.brightness,
+      contrast: skyEngine.shader.contrast,
+      colormap: "infrared"
+    });
+
+    skyEngine.setRealFitsCutout(
+      parsed,
+      offCanvas,
+      currentObject ? currentObject.ra : irsaState.queryRa,
+      currentObject ? currentObject.dec : irsaState.queryDec,
+      irsaState.cutoutSize
+    );
+
+    // Cập nhật các ô thông số HDU trên Inspector HUD
+    dom.hudObsTime.textContent = parsed.dateObs;
+    dom.hudEpoch.textContent = `${(irsaState.selectedRow?.collection || "spherex_dr1").toUpperCase()} • REAL FITS`;
+    dom.hudDetector.textContent = `Detector D${parsed.detector} (${parsed.wlMin}–${parsed.wlMax} µm)`;
+
+    dom.hudQualityPill.textContent = parsed.qualityMessage;
+    dom.hudQualityCode.textContent = `Bitmask: ${parsed.centerFlagHex}`;
+    dom.hudQualityPill.className =
+      parsed.qualityFlag === "CLEAN"
+        ? "quality-badge quality-clean"
+        : parsed.qualityFlag === "SATURATED_WARN"
+        ? "quality-badge quality-warn"
+        : "quality-badge quality-danger";
+
+    const peakVal = skyEngine.shader.subtractZodi
+      ? (parsed.centerPeakFlux - parsed.meanZodi).toFixed(2)
+      : parsed.centerPeakFlux.toFixed(2);
+    dom.hudImageFlux.textContent = `${peakVal} MJy/sr (Peak)`;
+    dom.hudZodiFlux.textContent = `${parsed.meanZodi.toFixed(2)} MJy/sr ${
+      skyEngine.shader.subtractZodi ? "(Đã trừ ZODI thật)" : "(Nền ZODI thật)"
+    }`;
+    dom.hudVariance.textContent = `±${parsed.medianVariance} MJy/sr²`;
+    dom.hudSnr.textContent = `${parsed.snr} (N_stars=${parsed.astrometryStars})`;
   }
 
   /**
@@ -394,7 +623,11 @@
 
     // Vẽ biểu đồ phổ 102 kênh (WCS-WAVE HDU) và ảnh Cutout Preview
     draw102SpectrumChart(obj.spectrumProfile, activeBand);
-    drawCutoutPreview(obj, fov);
+    if (irsaState.parsedFits && irsaState.parsedFits.valid) {
+      refreshRealFitsVisuals();
+    } else {
+      drawCutoutPreview(obj, fov);
+    }
   }
 
   /**
@@ -656,9 +889,23 @@
   }
 
   /**
-   * Tạo và tải xuống file .FITS chuẩn cấu trúc Header Thiên văn NASA (2880-byte blocks)
+   * Tải xuống file .FITS: Nếu đã kết nối NASA IRSA, tải trực tiếp file Multi-Extension FITS gốc từ NASA!
    */
   function downloadSimulatedFitsFile() {
+    if (irsaState.selectedRow && irsaState.selectedRow.access_url) {
+      const fullFitsUrl = `/api/irsa/cutout?access_url=${encodeURIComponent(
+        irsaState.selectedRow.access_url
+      )}&ra=${irsaState.queryRa}&dec=${irsaState.queryDec}&size=${irsaState.cutoutSize}&mode=full`;
+      const a = document.createElement("a");
+      const safeName = (currentObject?.name || "target").toLowerCase().replace(/[^a-z0-9]+/g, "_");
+      a.href = fullFitsUrl;
+      a.download = `nasa_irsa_spherex_${safeName}_D${irsaState.selectedRow.detector}.fits`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+
     const obj = currentObject || window.CURATED_OBJECTS[0];
     const headerCards = [
       "SIMPLE  =                    T / Standard FITS format (NASA SPHEREx Lv2 Cutout)",
@@ -802,11 +1049,28 @@
     // 4. Sự kiện chỉnh Brightness / Contrast / Zodi / Wavelength trên WebGL Canvas
     dom.brightnessSlider.addEventListener("input", () => {
       skyEngine.updateShader({ brightness: parseFloat(dom.brightnessSlider.value) });
+      if (irsaState.parsedFits) refreshRealFitsVisuals();
     });
 
     dom.contrastSlider.addEventListener("input", () => {
       skyEngine.updateShader({ contrast: parseFloat(dom.contrastSlider.value) });
+      if (irsaState.parsedFits) refreshRealFitsVisuals();
     });
+
+    if (dom.irsaFrameSelect) {
+      dom.irsaFrameSelect.addEventListener("change", async () => {
+        const idx = parseInt(dom.irsaFrameSelect.value, 10);
+        if (!isNaN(idx) && irsaState.siaRows[idx]) {
+          await loadAndRenderRealFitsFrame(
+            irsaState.siaRows[idx],
+            skyEngine.ra,
+            skyEngine.dec,
+            irsaState.cutoutSize,
+            irsaState.requestId
+          );
+        }
+      });
+    }
 
     dom.btnAutoContrast.addEventListener("click", () => {
       // Tự động cân chỉnh tương phản dựa trên Độ sáng nền (Background Flux / ZODI)
