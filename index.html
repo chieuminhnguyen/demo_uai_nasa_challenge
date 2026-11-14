@@ -24,8 +24,8 @@
         <div class="brand-title">SPHEREx</div>
       </div>
 
-      <!-- Khung Search Bar tích hợp -->
-      <div class="search-bar-container">
+      <!-- Khung Search Bar tích hợp (Mặc định ở chế độ Basic-Only mở rộng tối đa) -->
+      <div id="searchBarContainer" class="search-bar-container basic-only">
         
         <!-- PHẦN 1: Tìm kiếm Cơ bản cho người mới (Bảng xếp hạng thiên thể + Name Resolver) -->
         <div class="name-search-wrapper">
@@ -41,11 +41,14 @@
                 placeholder="VD: Sedna, Orion, Andromeda, Eris..."
                 autocomplete="off"
               />
-              <button id="btnResolveName" class="btn-secondary" title="Tự động đổi tên thiên thể sang tọa độ RA & Dec">
+              <button id="btnResolveName" class="btn-secondary" title="Tự động đổi tên thiên thể sang tọa độ RA & Dec (Phím Enter)">
                 🔍 Tìm tên
               </button>
               <button id="btnToggleCatalog" class="btn-secondary" title="Mở bảng xếp hạng các thiên thể được yêu thích nhất">
                 🏆 Top Gợi Ý ▾
+              </button>
+              <button id="btnToggleExpertCoords" type="button" class="btn-secondary btn-expert-toggle" title="Mở / Thu gọn chế độ nhập tọa độ thủ công RA & Dec (Dành cho Chuyên gia)">
+                🧭 Tọa độ (Expert)
               </button>
             </div>
           </div>
@@ -67,10 +70,10 @@
           </div>
         </div>
 
-        <div class="search-divider"></div>
+        <div id="searchDivider" class="search-divider"></div>
 
-        <!-- PHẦN 2: 3 Ô Thông Số Đầu Vào (Ô 1: RA, Ô 2: Dec, Ô 3: FOV + Nút Go/Search) -->
-        <div class="coords-inputs-group">
+        <!-- PHẦN 2: 3 Ô Thông Số Đầu Vào (Ô 1: RA, Ô 2: Dec, Ô 3: FOV + Nút Search) -->
+        <div id="coordsInputsGroup" class="coords-inputs-group">
           
           <!-- Ô 1: RA (0°→360°) -->
           <div class="param-box">
@@ -162,12 +165,19 @@
 
       <!-- Thẻ Nổi Chú Thích Cạnh Tâm Ngắm (Floating Target HUD Card) -->
       <div id="floatingTargetCard" class="floating-target-card">
+        <button id="btnCloseFloatingCard" type="button" class="btn-close-card" title="Đóng thẻ thông tin này (✕)">✕</button>
         <div id="cardCategory" class="card-cat-tag">🎯 Ứng viên săn Planet X</div>
         <div id="cardTitle" class="card-title">90377 Sedna</div>
         <div id="cardCoordsDeg" class="card-coords-deg">RA: 56.8392° | Dec: +11.9644°</div>
         <div id="cardCoordsHMS" class="card-coords-hms">03h 47m 21.4s • +11° 57' 51.8"</div>
         <div id="cardDistance" class="card-distance">Khoảng cách: 84.2 AU</div>
       </div>
+
+      <!-- Nút Mini Mở Lại Thẻ khi bị đóng (HUD Mini Pill) -->
+      <button id="btnReopenFloatingCard" type="button" class="btn-reopen-card hidden" title="Mở lại thẻ thông tin thiên thể (Phím tắt: I)">
+        <span class="reopen-icon">ℹ️</span>
+        <span class="reopen-text">Hiện thẻ</span>
+      </button>
 
       <!-- Thanh Điều Khiển Tương Tác Canvas phía dưới (GPU Brightness/Contrast + 102 Dải Sóng) -->
       <div class="map-bottom-dock">
@@ -196,6 +206,13 @@
           <label style="cursor:pointer; display:flex; align-items:center; gap:5px;">
             <input id="toggleGrid" type="checkbox" checked />
             <span>Lưới RA/Dec</span>
+          </label>
+        </div>
+
+        <div class="shader-control-item">
+          <label style="cursor:pointer; display:flex; align-items:center; gap:5px;" title="Bật / Tắt thẻ thông tin mục tiêu nổi cạnh tâm ngắm">
+            <input id="toggleTargetCard" type="checkbox" checked />
+            <span>Thẻ HUD</span>
           </label>
         </div>
 
@@ -448,9 +465,9 @@
       <div class="fits-zoom-header">
         <div class="fits-zoom-title-group">
           <div class="fits-zoom-tag-row">
-            <span class="zoom-epoch-tag tag-mode-badge">🛰️ TRẠM SO SÁNH ẢNH ĐA THỜI ĐIỂM SPHEREx</span>
+            <span class="zoom-epoch-tag tag-mode-badge">TRẠM SO SÁNH ẢNH ĐA THỜI ĐIỂM SPHEREx</span>
             <span id="fitsZoomBandBadge" class="zoom-meta-tag">CẢM BIẾN D6 (4.41–5.01 µm)</span>
-            <span id="fitsZoomBaseline" class="zoom-meta-tag tag-clean">⏱️ Cách nhau: -- ngày</span>
+            <span id="fitsZoomBaseline" class="zoom-meta-tag tag-clean">Cách nhau: -- ngày</span>
           </div>
           <h2 id="fitsZoomTitle">KÍNH SO SÁNH ĐỐI CHỨNG (HIỂN THỊ SIÊU TO RÕ)</h2>
         </div>
@@ -459,7 +476,6 @@
 
       <!-- 1. DÒNG HƯỚNG DẪN DỄ HIỂU DÀNH CHO NGƯỜI MỚI -->
       <div class="newbie-tip-banner">
-        <span class="tip-icon">💡</span>
         <span class="tip-text">
           <b>Mẹo phát hiện:</b> Các ngôi sao ở xa sẽ <b>đứng bất động</b>. Đốm sáng nào <b>nhảy vị trí</b> giữa 2 lần chụp chính là <b>Hành tinh hoặc Tiểu hành tinh</b> đang di chuyển!
         </span>
@@ -470,17 +486,15 @@
         <!-- Nút chọn chế độ xem to rõ -->
         <div class="mode-buttons-big">
           <button type="button" id="btnModeSplit" class="btn-mode-card active">
-            <span class="btn-mode-icon">◫</span>
             <div class="btn-mode-texts">
-              <span class="btn-mode-title">1. ĐẶT CẠNH NHAU (440px)</span>
+              <span class="btn-mode-title">1. ĐẶT CẠNH NHAU</span>
               <span class="btn-mode-desc">Soi chi tiết cả 2 ảnh cùng lúc</span>
             </div>
           </button>
 
           <button type="button" id="btnModeBlink" class="btn-mode-card">
-            <span class="btn-mode-icon">🎬</span>
             <div class="btn-mode-texts">
-              <span class="btn-mode-title">2. XEM NHẤP NHÁY (540px)</span>
+              <span class="btn-mode-title">2. XEM NHẤP NHÁY</span>
               <span class="btn-mode-desc">Chớp tắt bắt chuyển động như Clyde Tombaugh</span>
             </div>
           </button>
@@ -488,7 +502,7 @@
 
         <!-- Bộ phóng đại quang học (Magnification Pills) -->
         <div class="zoom-mag-group">
-          <span class="mag-label">🔍 Độ phóng đại:</span>
+          <span class="mag-label">Độ phóng đại:</span>
           <button type="button" class="btn-mag-pill active" data-mag="1">1x Chuẩn</button>
           <button type="button" class="btn-mag-pill" data-mag="1.5">1.5x To</button>
           <button type="button" class="btn-mag-pill" data-mag="2">2x Siêu To</button>
@@ -496,11 +510,11 @@
 
         <!-- Bộ điều tốc chớp nháy (Chỉ hiện ở Blink Mode) -->
         <div id="blinkControlsWrap" class="blink-speed-panel hidden">
-          <button type="button" id="btnBlinkPlayPause" class="btn-play-pause">⏸️ Tạm Dừng</button>
+          <button type="button" id="btnBlinkPlayPause" class="btn-play-pause">Tạm Dừng</button>
           <div class="speed-slider-group">
-            <span class="speed-icon">🐢 Chậm</span>
+            <span class="speed-icon">Chậm</span>
             <input type="range" id="blinkSpeedSlider" min="0.5" max="4.0" step="0.5" value="2.0" class="speed-range-input" title="Tốc độ nhấp nháy" />
-            <span class="speed-icon">🐇 Nhanh</span>
+            <span class="speed-icon">Nhanh</span>
           </div>
           <div id="blinkStatusLed" class="blink-status-led led-t1">
             <span class="led-dot">●</span> ĐANG HIỆN: ẢNH CŨ
@@ -511,12 +525,12 @@
       <!-- 3. KHU VỰC HIỂN THỊ CANVAS SIÊU TO RÕ -->
       <div class="fits-zoom-body" id="fitsZoomBody">
         
-        <!-- VIEW A: ĐẶT CẠNH NHAU (SIDE-BY-SIDE: 2 CANVAS 440x440) -->
+        <!-- VIEW A: ĐẶT CẠNH NHAU (SIDE-BY-SIDE: ẢNH 1 - THÔNG SỐ ĐIỂM SOI - ẢNH 2) -->
         <div id="viewSplitWrapper" class="split-stage-wrap">
           <!-- Cột Ảnh Cũ (T1) -->
-          <div class="canvas-box-card card-old">
+          <div class="canvas-box-card card-old" id="cardSplitT1">
             <div class="canvas-header-pill pill-old">
-              <span class="pill-title">🔵 1. ẢNH QUÁ KHỨ (LẦN CHỤP TRƯỚC)</span>
+              <span class="pill-title">1. ẢNH QUÁ KHỨ (LẦN CHỤP TRƯỚC)</span>
               <span id="labelDateT1" class="pill-date">--</span>
             </div>
             <div class="canvas-interactive-wrapper" id="wrapSplitT1">
@@ -525,16 +539,41 @@
             </div>
           </div>
 
-          <!-- Cầu nối so sánh thời gian ở giữa -->
-          <div class="time-bridge-badge">
-            <span class="bridge-icon">⚡</span>
-            <span id="labelDeltaDays" class="bridge-days">Cách nhau: -- ngày</span>
-          </div>
+          <!-- BẢNG THÔNG SỐ ĐIỂM SOI (NẰM GIỮA 2 TẤM ẢNH) -->
+          <aside class="fits-zoom-sidebar" id="fitsZoomSidebar">
+            <div class="sidebar-header">
+              <span class="sidebar-title">THÔNG SỐ ĐIỂM SOI</span>
+            </div>
+
+            <div class="sidebar-metric-card card-pixel">
+              <span class="metric-label">Vị trí đang chỉ</span>
+              <span id="hudFriendlyPixel" class="sum-val val-pixel">Rê chuột lên ảnh để soi điểm</span>
+            </div>
+
+            <div class="sidebar-metric-card card-t1">
+              <span class="metric-label">Độ sáng ảnh cũ (Lần 1)</span>
+              <span id="hudFriendlyFluxT1" class="sum-val val-blue">--</span>
+            </div>
+
+            <div class="sidebar-metric-card card-t2">
+              <span class="metric-label">Độ sáng ảnh mới (Lần 2)</span>
+              <span id="hudFriendlyFluxT2" class="sum-val val-orange">--</span>
+            </div>
+
+            <div class="sidebar-metric-card card-diff">
+              <span class="metric-label">Biến đổi độ sáng</span>
+              <span id="hudFriendlyDelta" class="sum-val val-status">Đứng im bình thường</span>
+            </div>
+
+            <div class="sidebar-hint">
+              Rê chuột trên ảnh để kiểm tra quang thông từng pixel giữa 2 thời điểm chụp
+            </div>
+          </aside>
 
           <!-- Cột Ảnh Mới (T2) -->
-          <div class="canvas-box-card card-new">
+          <div class="canvas-box-card card-new" id="cardSplitT2">
             <div class="canvas-header-pill pill-new">
-              <span class="pill-title">🟠 2. ẢNH HIỆN TẠI (LẦN CHỤP SAU)</span>
+              <span class="pill-title">2. ẢNH HIỆN TẠI (LẦN CHỤP SAU)</span>
               <span id="labelDateT2" class="pill-date">--</span>
             </div>
             <div class="canvas-interactive-wrapper" id="wrapSplitT2">
@@ -544,38 +583,15 @@
           </div>
         </div>
 
-        <!-- VIEW B: CHỚP NHÁY TRUNG TÂM (BLINK VIEW: 1 CANVAS KHỔNG LỒ 540x540) -->
+        <!-- VIEW B: CHỚP NHÁY TRUNG TÂM (BLINK VIEW: 1 CANVAS) -->
         <div id="viewBlinkWrapper" class="blink-stage-wrap hidden">
           <div class="canvas-interactive-wrapper blink-main-wrapper" id="wrapBlinkMain">
             <canvas id="canvasBlinkMain" width="540" height="540"></canvas>
             <div id="crosshairBlink" class="friendly-crosshair"></div>
-            <div id="blinkScreenBanner" class="blink-screen-tag tag-old">🔵 ẢNH QUÁ KHỨ</div>
+            <div id="blinkScreenBanner" class="blink-screen-tag tag-old">ẢNH QUÁ KHỨ</div>
           </div>
         </div>
 
-      </div>
-
-      <!-- 4. THANH ĐO QUANG THÔNG TỰ ĐỘNG ĐỌC KẾT QUẢ TIẾNG VIỆT -->
-      <div class="newbie-flux-summary">
-        <div class="summary-col">
-          <span class="sum-label">🎯 Vị trí đang chỉ:</span>
-          <span id="hudFriendlyPixel" class="sum-val">Rê chuột lên ảnh để soi điểm</span>
-        </div>
-        <div class="summary-divider">|</div>
-        <div class="summary-col">
-          <span class="sum-label">🔵 Độ sáng ảnh cũ:</span>
-          <span id="hudFriendlyFluxT1" class="sum-val val-blue">--</span>
-        </div>
-        <div class="summary-divider">➔</div>
-        <div class="summary-col">
-          <span class="sum-label">🟠 Độ sáng ảnh mới:</span>
-          <span id="hudFriendlyFluxT2" class="sum-val val-orange">--</span>
-        </div>
-        <div class="summary-divider">|</div>
-        <div class="summary-col">
-          <span class="sum-label">✨ Biến đổi độ sáng:</span>
-          <span id="hudFriendlyDelta" class="sum-val val-status">Đứng im bình thường</span>
-        </div>
       </div>
 
     </div>

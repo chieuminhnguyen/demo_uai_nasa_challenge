@@ -34,6 +34,7 @@
   };
   let isNameInputDirty = false;
   let isFovExplicitlyChanged = false;
+  let isFloatingCardDismissed = false;
 
   function formatCoordPrecision(val) {
     const num = Number(val);
@@ -49,6 +50,11 @@
   const dom = {};
 
   function initDOM() {
+    dom.searchBarContainer = document.getElementById("searchBarContainer");
+    dom.btnToggleExpertCoords = document.getElementById("btnToggleExpertCoords");
+    dom.coordsInputsGroup = document.getElementById("coordsInputsGroup");
+    dom.searchDivider = document.getElementById("searchDivider");
+
     dom.nameSearchInput = document.getElementById("nameSearchInput");
     dom.btnResolveName = document.getElementById("btnResolveName");
     dom.curatedDropdown = document.getElementById("curatedDropdown");
@@ -67,6 +73,9 @@
 
     // Floating Target Card trên bản đồ
     dom.floatingCard = document.getElementById("floatingTargetCard");
+    dom.btnCloseFloatingCard = document.getElementById("btnCloseFloatingCard");
+    dom.btnReopenFloatingCard = document.getElementById("btnReopenFloatingCard");
+    dom.toggleTargetCard = document.getElementById("toggleTargetCard");
     dom.cardTitle = document.getElementById("cardTitle");
     dom.cardCategory = document.getElementById("cardCategory");
     dom.cardCoordsDeg = document.getElementById("cardCoordsDeg");
@@ -178,6 +187,9 @@
     dom.hudFriendlyFluxT1 = document.getElementById("hudFriendlyFluxT1");
     dom.hudFriendlyFluxT2 = document.getElementById("hudFriendlyFluxT2");
     dom.hudFriendlyDelta = document.getElementById("hudFriendlyDelta");
+    dom.fitsZoomSidebar = document.getElementById("fitsZoomSidebar");
+    dom.cardSplitT1 = document.getElementById("cardSplitT1");
+    dom.cardSplitT2 = document.getElementById("cardSplitT2");
 
 
 
@@ -869,6 +881,12 @@
       if (dom.viewSplitWrapper) dom.viewSplitWrapper.classList.remove("hidden");
       if (dom.viewBlinkWrapper) dom.viewBlinkWrapper.classList.add("hidden");
       if (dom.blinkControlsWrap) dom.blinkControlsWrap.classList.add("hidden");
+
+      // Chuyển thanh thông số điểm soi vào nằm giữa 2 tấm ảnh (trước card T2)
+      if (dom.fitsZoomSidebar && dom.viewSplitWrapper && dom.cardSplitT2) {
+        dom.viewSplitWrapper.insertBefore(dom.fitsZoomSidebar, dom.cardSplitT2);
+      }
+
       stopBlinkAnimation();
     } else {
       if (dom.btnModeBlink) dom.btnModeBlink.classList.add("active");
@@ -876,6 +894,12 @@
       if (dom.viewBlinkWrapper) dom.viewBlinkWrapper.classList.remove("hidden");
       if (dom.viewSplitWrapper) dom.viewSplitWrapper.classList.add("hidden");
       if (dom.blinkControlsWrap) dom.blinkControlsWrap.classList.remove("hidden");
+
+      // Chuyển thanh thông số điểm soi sang bên phải ảnh Blink
+      if (dom.fitsZoomSidebar && dom.viewBlinkWrapper) {
+        dom.viewBlinkWrapper.appendChild(dom.fitsZoomSidebar);
+      }
+
       startBlinkAnimation();
     }
   }
@@ -886,9 +910,10 @@
       dom.fitsZoomBandBadge.textContent = `CẢM BIẾN D${detNum} (${getDetectorBandDesc(detNum)})`;
     }
 
-    const baselineText = dom.baselineStatsBadge ? dom.baselineStatsBadge.textContent.replace("⏱️ Baseline: ", "") : "--";
+    const rawBaseline = dom.baselineStatsBadge ? dom.baselineStatsBadge.textContent : "--";
+    const baselineText = rawBaseline.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "").replace(/^.*Baseline:\s*/i, "").trim() || "--";
     if (dom.fitsZoomBaseline) {
-      dom.fitsZoomBaseline.textContent = `⏱️ Cách nhau: ${baselineText}`;
+      dom.fitsZoomBaseline.textContent = `Cách nhau: ${baselineText}`;
     }
     if (dom.labelDeltaDays) {
       dom.labelDeltaDays.textContent = `Cách nhau: ${baselineText}`;
@@ -957,7 +982,7 @@
     stopBlinkAnimation();
     dualViewState.isBlinking = true;
     if (dom.btnBlinkPlayPause) {
-      dom.btnBlinkPlayPause.textContent = "⏸️ Tạm Dừng";
+      dom.btnBlinkPlayPause.textContent = "Tạm Dừng";
     }
 
     const speed = parseFloat(dom.blinkSpeedSlider?.value) || 2.0;
@@ -976,7 +1001,7 @@
       dualViewState.blinkInterval = null;
     }
     if (dom.btnBlinkPlayPause) {
-      dom.btnBlinkPlayPause.textContent = "▶️ Tiếp Tục";
+      dom.btnBlinkPlayPause.textContent = "Tiếp Tục";
     }
   }
 
@@ -1000,7 +1025,7 @@
     }
     if (dom.blinkScreenBanner) {
       dom.blinkScreenBanner.className = `blink-screen-tag ${isT1 ? "tag-old" : "tag-new"}`;
-      dom.blinkScreenBanner.textContent = isT1 ? "🔵 ẢNH QUÁ KHỨ (LẦN 1)" : "🟠 ẢNH HIỆN TẠI (LẦN 2)";
+      dom.blinkScreenBanner.textContent = isT1 ? "ẢNH QUÁ KHỨ (LẦN 1)" : "ẢNH HIỆN TẠI (LẦN 2)";
     }
   }
 
@@ -1097,8 +1122,8 @@
           if (dom.fitsZoomBody) { dom.fitsZoomBody.style.overflow = "hidden"; }
         } else {
           // Khi chủ động phóng to 1.5x hoặc 2x: mở cuộn nội bộ để soi chi tiết
-          const baseSplit = Math.max(340, Math.min(440, window.innerHeight - 200));
-          const baseBlink = Math.max(400, Math.min(540, window.innerHeight - 200));
+          const baseSplit = Math.max(280, Math.min(370, window.innerHeight - 220));
+          const baseBlink = Math.max(300, Math.min(440, window.innerHeight - 200));
 
           if (dom.canvasSplitT1) {
             dom.canvasSplitT1.style.width = `${Math.round(baseSplit * scale)}px`;
@@ -1132,6 +1157,14 @@
       ? ` | Chuyển động riêng PM: α ${obj.pm_ra_arcsec_yr}"/yr, δ ${obj.pm_dec_arcsec_yr}"/yr` 
       : "";
     dom.cardDistance.textContent = `Khoảng cách: ${obj.distanceAU}${pmInfo}`;
+
+    if (dom.btnReopenFloatingCard) {
+      dom.btnReopenFloatingCard.title = `Mở lại thông tin "${obj.name}" (Phím tắt: I)`;
+    }
+
+    // Khi chọn một thiên thể mới, tự động mở lại thẻ nếu trước đó người dùng đã tắt
+    isFloatingCardDismissed = false;
+    if (dom.toggleTargetCard) dom.toggleTargetCard.checked = true;
   }
 
   /**
@@ -1141,15 +1174,43 @@
     if (!pos.visible || isAladinMode) {
       dom.floatingCard.style.opacity = "0";
       dom.floatingCard.style.pointerEvents = "none";
+      if (dom.btnReopenFloatingCard) {
+        dom.btnReopenFloatingCard.classList.add("hidden");
+        dom.btnReopenFloatingCard.style.opacity = "0";
+        dom.btnReopenFloatingCard.style.pointerEvents = "none";
+      }
       return;
     }
-    dom.floatingCard.style.opacity = "1";
-    dom.floatingCard.style.pointerEvents = "auto";
 
     // Đặt thẻ nổi lệch sang bên phải của vòng tròn tâm ngắm để không che khuất ngôi sao
-    const left = Math.min(skyEngine.width - 285, Math.max(14, pos.x + 38));
+    const left = Math.min(skyEngine.width - 295, Math.max(14, pos.x + 38));
     const top = Math.min(skyEngine.height - 135, Math.max(14, pos.y - 48));
-    dom.floatingCard.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
+
+    if (isFloatingCardDismissed) {
+      // Ẩn thẻ to
+      dom.floatingCard.style.opacity = "0";
+      dom.floatingCard.style.pointerEvents = "none";
+
+      // Hiện nút mini huy hiệu "ℹ️ Hiện thẻ" bám ngay cạnh tâm ngắm
+      if (dom.btnReopenFloatingCard) {
+        dom.btnReopenFloatingCard.classList.remove("hidden");
+        dom.btnReopenFloatingCard.style.opacity = "1";
+        dom.btnReopenFloatingCard.style.pointerEvents = "auto";
+        dom.btnReopenFloatingCard.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(pos.y - 14)}px, 0)`;
+      }
+    } else {
+      // Hiện thẻ to
+      dom.floatingCard.style.opacity = "1";
+      dom.floatingCard.style.pointerEvents = "auto";
+      dom.floatingCard.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
+
+      // Ẩn nút mini
+      if (dom.btnReopenFloatingCard) {
+        dom.btnReopenFloatingCard.classList.add("hidden");
+        dom.btnReopenFloatingCard.style.opacity = "0";
+        dom.btnReopenFloatingCard.style.pointerEvents = "none";
+      }
+    }
   }
 
   /**
@@ -1520,6 +1581,21 @@
    * Gắn toàn bộ sự kiện tương tác người dùng
    */
   function bindUIEvents() {
+    // 0. Nút Bật/Tắt chế độ nhập Tọa độ Chuyên gia (Expert Coords Toggle)
+    if (dom.btnToggleExpertCoords && dom.searchBarContainer) {
+      dom.btnToggleExpertCoords.addEventListener("click", () => {
+        const isBasicOnly = dom.searchBarContainer.classList.toggle("basic-only");
+        if (!isBasicOnly) {
+          dom.btnToggleExpertCoords.classList.add("active");
+          dom.btnToggleExpertCoords.textContent = "🧭 Tọa độ: BẬT ▾";
+          setTimeout(() => dom.raInput?.focus(), 60);
+        } else {
+          dom.btnToggleExpertCoords.classList.remove("active");
+          dom.btnToggleExpertCoords.textContent = "🧭 Tọa độ (Expert)";
+        }
+      });
+    }
+
     // 1. Nút bật/tắt bảng Xếp hạng Thiên thể Yêu thích (Curated Catalog Dropdown)
     dom.btnToggleCatalog.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1701,6 +1777,62 @@
 
     dom.toggleGrid.addEventListener("change", () => {
       skyEngine.updateShader({ showGrid: dom.toggleGrid.checked });
+    });
+
+    // Hàm điều khiển hiển thị Thẻ HUD mục tiêu
+    function setFloatingCardVisibility(show) {
+      isFloatingCardDismissed = !show;
+      if (dom.toggleTargetCard) dom.toggleTargetCard.checked = show;
+      if (isFloatingCardDismissed) {
+        dom.floatingCard.style.opacity = "0";
+        dom.floatingCard.style.pointerEvents = "none";
+        if (dom.btnReopenFloatingCard) {
+          dom.btnReopenFloatingCard.classList.remove("hidden");
+          dom.btnReopenFloatingCard.style.opacity = "1";
+          dom.btnReopenFloatingCard.style.pointerEvents = "auto";
+        }
+      } else {
+        dom.floatingCard.style.opacity = "1";
+        dom.floatingCard.style.pointerEvents = "auto";
+        if (dom.btnReopenFloatingCard) {
+          dom.btnReopenFloatingCard.classList.add("hidden");
+          dom.btnReopenFloatingCard.style.opacity = "0";
+          dom.btnReopenFloatingCard.style.pointerEvents = "none";
+        }
+      }
+    }
+
+    // Checkbox Bật / Tắt thẻ thông tin HUD ở thanh dock dưới
+    if (dom.toggleTargetCard) {
+      dom.toggleTargetCard.addEventListener("change", () => {
+        setFloatingCardVisibility(dom.toggleTargetCard.checked);
+      });
+    }
+
+    // Nút ✕ trên thẻ thông tin nổi để đóng nhanh
+    if (dom.btnCloseFloatingCard) {
+      dom.btnCloseFloatingCard.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setFloatingCardVisibility(false);
+      });
+    }
+
+    // Nút Mini "ℹ️ Hiện thẻ" bám cạnh tâm ngắm để mở lại thẻ nhanh
+    if (dom.btnReopenFloatingCard) {
+      dom.btnReopenFloatingCard.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setFloatingCardVisibility(true);
+      });
+    }
+
+    // Phím tắt bàn phím 'I' (Info) để bật/tắt nhanh thẻ thông tin
+    document.addEventListener("keydown", (e) => {
+      const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : "";
+      if (activeTag === "input" || activeTag === "textarea" || activeTag === "select") return;
+      if (e.key === "i" || e.key === "I") {
+        e.preventDefault();
+        setFloatingCardVisibility(isFloatingCardDismissed); // Đảo trạng thái
+      }
     });
 
     dom.bandSlider.addEventListener("input", () => {
