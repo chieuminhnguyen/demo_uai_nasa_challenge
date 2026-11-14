@@ -88,7 +88,8 @@ class SpherexSkyEngine {
 
     // Thêm cụm sao dày đặc xung quanh các thiên thể trong Curated DB để khi zoom vào FOV 0.1 - 0.5 rất chi tiết
     (window.CURATED_OBJECTS || []).forEach((obj) => {
-      for (let j = 0; j < 95; j++) {
+      const clusterCount = obj.category === "spherex-irsa" ? 12 : 65;
+      for (let j = 0; j < clusterCount; j++) {
         const spread = 0.65;
         const ra = (obj.ra + (rand() - 0.5) * spread * 2 + 360) % 360;
         const dec = Math.max(-89.9, Math.min(89.9, obj.dec + (rand() - 0.5) * spread * 2));

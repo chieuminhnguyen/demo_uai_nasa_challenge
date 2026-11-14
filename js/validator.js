@@ -213,7 +213,10 @@ window.AstroValidator = {
           minAngularDist = p_dist;
           bestMatch = { object: obj, distanceDeg: p_dist, matchType: "PropagatedEpoch" };
         }
-      } else if (obj.pm_ra_arcsec_yr !== undefined && obj.pm_dec_arcsec_yr !== undefined) {
+      } else if (
+        (obj.pm_ra_arcsec_yr !== undefined && Math.abs(obj.pm_ra_arcsec_yr) > 0.05) ||
+        (obj.pm_dec_arcsec_yr !== undefined && Math.abs(obj.pm_dec_arcsec_yr) > 0.05)
+      ) {
         const dtYr = 2025.887748 - (obj.epoch || 2000.0);
         const cosD = Math.max(1e-6, Math.cos((obj.dec * Math.PI) / 180));
         const propRa = ((obj.ra + (obj.pm_ra_arcsec_yr * dtYr) / 3600 / cosD) % 360 + 360) % 360;
@@ -284,14 +287,23 @@ window.AstroValidator = {
     const q = String(query || "").trim().toLowerCase();
     if (!q) return { found: false };
 
-    // 1. Tra cứu trong Curated Database trước
-    const localHit = window.CURATED_OBJECTS.find(
+    // 1. Tra cứu trong Curated Database + 100 Mẫu SPHEREx IRSA trước (Ưu tiên khớp chính xác 100%, sau đó mới khớp chuỗi con)
+    const exactHit = window.CURATED_OBJECTS.find(
       (obj) =>
         obj.id.toLowerCase() === q ||
+        String(obj.source_id || "").toLowerCase() === q ||
+        String(obj.designation || "").toLowerCase() === q ||
         obj.name.toLowerCase() === q ||
-        obj.name.toLowerCase().includes(q) ||
-        (obj.aliases && obj.aliases.some((a) => a.toLowerCase() === q || a.toLowerCase().includes(q)))
+        (obj.aliases && obj.aliases.some((a) => a.toLowerCase() === q))
     );
+    const localHit =
+      exactHit ||
+      window.CURATED_OBJECTS.find(
+        (obj) =>
+          obj.name.toLowerCase().includes(q) ||
+          String(obj.designation || "").toLowerCase().includes(q) ||
+          (obj.aliases && obj.aliases.some((a) => a.toLowerCase().includes(q)))
+      );
 
     if (localHit) {
       return {

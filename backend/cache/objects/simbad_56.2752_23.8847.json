@@ -1,0 +1,51 @@
+{
+  "id": "simbad_675825",
+  "name": "Cl Melotte 22 560",
+  "aliases": [
+    "tic 67829796",
+    "galah 150109001001206",
+    "gaia dr3 65195408827472640",
+    "ap j03451106+2353411",
+    "2mass j03451106+2353411",
+    "cl* melotte 22 wcz 69",
+    "cl melotte 22 560",
+    "epic 211057608",
+    "cl* melotte 22 hii 560",
+    "gaia dr2 65195408827472640"
+  ],
+  "category": "wonder",
+  "categoryLabel": "🌟 SIMBAD (* • Near-IR Stellar Source)",
+  "rank": "SIMBAD Verified",
+  "ra": 56.296104,
+  "dec": 23.894762,
+  "epoch": 2000.0,
+  "pm_ra_arcsec_yr": 0.036,
+  "pm_dec_arcsec_yr": -0.029,
+  "defaultFov": 0.1,
+  "recommended_detectors": [
+    6,
+    5,
+    4,
+    3,
+    2,
+    1
+  ],
+  "distanceAU": "SIMBAD OID #675825 (Δ=77.8\")",
+  "description": "Ngôi sao / Thiên thể xác thực từ danh mục SIMBAD Quốc tế (Cl Melotte 22 560, Phân loại quang phổ: Near-IR Stellar Source, Loại: *).",
+  "colorTint": "#38bdf8",
+  "spectralType": "Near-IR Stellar Source (*)",
+  "telemetry": {
+    "obsTime": "2025-08-15T20:45:11Z",
+    "epoch": "DR1 (SPHEREx All-Sky Survey)",
+    "detectorArray": "Detector D6 (4.41–5.01 µm)",
+    "imageFlux": 43.7,
+    "zodiFlux": 6.09,
+    "variance": 0.02,
+    "psfFwhm": 6.18,
+    "snr": 64.0,
+    "qualityFlag": "CLEAN",
+    "qualityCode": "0x0000",
+    "qualityMessage": "🟢 SẠCH NHIỄU (Đã xác thực từ SIMBAD & NASA IRSA)"
+  },
+  "spectrumProfile": "stellar_hot"
+}

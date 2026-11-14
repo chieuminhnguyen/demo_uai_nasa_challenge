@@ -1,0 +1,50 @@
+{
+  "id": "simbad_7822195",
+  "name": "Kepler-186",
+  "aliases": [
+    "tic 268159861",
+    "ap j19543665+4357180",
+    "ucac4 670-080738",
+    "gaia dr3 2079000330051813504",
+    "gaia dr2 2079000330051813504",
+    "koi-571",
+    "2mass j19543665+4357180",
+    "kepler-186",
+    "kic 8120608"
+  ],
+  "category": "wonder",
+  "categoryLabel": "🌟 SIMBAD (Er* • M1V)",
+  "rank": "SIMBAD Verified",
+  "ra": 298.652723,
+  "dec": 43.955007,
+  "epoch": 2000.0,
+  "pm_ra_arcsec_yr": 0.0022,
+  "pm_dec_arcsec_yr": -0.0044,
+  "defaultFov": 0.1,
+  "recommended_detectors": [
+    6,
+    5,
+    4,
+    3,
+    2,
+    1
+  ],
+  "distanceAU": "SIMBAD OID #7822195 (Δ=0.0\")",
+  "description": "Ngôi sao / Thiên thể xác thực từ danh mục SIMBAD Quốc tế (Kepler-186, Phân loại quang phổ: M1V, Loại: Er*).",
+  "colorTint": "#38bdf8",
+  "spectralType": "M1V (Er*)",
+  "telemetry": {
+    "obsTime": "2025-08-15T20:45:11Z",
+    "epoch": "DR1 (SPHEREx All-Sky Survey)",
+    "detectorArray": "Detector D6 (4.41–5.01 µm)",
+    "imageFlux": 35.71,
+    "zodiFlux": 5.16,
+    "variance": 0.02,
+    "psfFwhm": 6.18,
+    "snr": 64.0,
+    "qualityFlag": "CLEAN",
+    "qualityCode": "0x0000",
+    "qualityMessage": "🟢 SẠCH NHIỄU (Đã xác thực từ SIMBAD & NASA IRSA)"
+  },
+  "spectrumProfile": "stellar_hot"
+}

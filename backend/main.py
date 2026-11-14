@@ -1,6 +1,7 @@
 """
 UAI NASA SPACE APPS CHALLENGE — SPHEREx & PLANET X PYTHON BACKEND
 FastAPI + Astropy + NumPy + HTTPX Live NASA/IPAC IRSA Gateway
+Source Archive: https://irsa.ipac.caltech.edu/Missions/spherex.html
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from backend.targets import TARGETS, propagate_proper_motion, resolve_target_by_
 from backend.services.irsa_client import (
     analyze_fits_with_astropy,
     fetch_irsa_fits_cutout,
+    load_spherex_100_samples,
     parse_sia_csv_rows,
     query_irsa_sia_csv,
     resolve_name_astronomical,
@@ -28,9 +30,9 @@ app = FastAPI(
     title="NASA SPHEREx & Planet X — Interactive Sky Map Backend",
     description=(
         "Python Backend (FastAPI + Astropy + NumPy) connecting live NASA/IPAC IRSA "
-        "SPHEREx SIAv2 catalogs and Multi-Extension FITS cutouts."
+        "SPHEREx SPLICES catalog, SIAv2 observations, and Multi-Extension FITS cutouts."
     ),
-    version="2.0.0",
+    version="2.1.0",
 )
 
 app.add_middleware(
@@ -52,18 +54,36 @@ async def disable_static_browser_cache(request: Request, call_next):
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint confirming Python + Astropy + NumPy backend status."""
+    """Health check endpoint confirming Python + Astropy + NumPy + 100 Real IRSA Samples status."""
     import astropy
     import numpy as np
     import sys
 
+    samples = load_spherex_100_samples()
     return {
         "status": "ok",
-        "backend": "Python FastAPI + Astropy",
+        "backend": "Python FastAPI + Astropy + NASA IRSA SPLICES",
         "python_version": sys.version.split()[0],
         "astropy_version": astropy.__version__,
         "numpy_version": np.__version__,
         "benchmark_targets_count": len(TARGETS),
+        "irsa_spherex_samples_count": len(samples),
+        "source_archive": "https://irsa.ipac.caltech.edu/Missions/spherex.html",
+    }
+
+
+@app.get("/api/samples")
+async def get_spherex_100_samples():
+    """
+    Return the 100 real celestial samples pulled from the NASA/IPAC IRSA SPHEREx Archive
+    (`https://irsa.ipac.caltech.edu/Missions/spherex.html` — `splices` + Benchmark catalog).
+    """
+    samples = load_spherex_100_samples()
+    return {
+        "count": len(samples),
+        "source": "https://irsa.ipac.caltech.edu/Missions/spherex.html",
+        "catalogs": ["splices (The SPHEREx Target List of Ice Sources)", "spherex_dr1 / spherex_qr3"],
+        "samples": samples,
     }
 
 
@@ -108,32 +128,46 @@ async def resolve_target_endpoint(q: str = Query(..., description="Target name o
 async def astro_reverse_lookup(
     ra: float = Query(..., ge=0.0, le=360.0),
     dec: float = Query(..., ge=-90.0, le=90.0),
-    radius: float = Query(default=0.08, ge=0.005, le=1.0),
+    radius: float = Query(default=0.08, ge=0.001, le=1.0),
 ):
     """
-    Live Astronomical Reverse Coordinate Lookup via Harvard/CDS SIMBAD TAP.
-    Given any (RA, Dec) in the sky, identifies the star/celestial object at that coordinate.
+    Unified 3-Tier Astronomical Reverse Coordinate Lookup:
+      1. 100 Real NASA/IPAC IRSA SPHEREx Samples (`spherex_100_samples.json` + `TARGETS`)
+      2. Live NASA/IPAC IRSA Gator Cone Search on `splices` (9.92M SPHEREx Target List of Ice Sources)
+      3. Live Harvard/CDS SIMBAD TAP (`https://simbad.harvard.edu/simbad/sim-tap/sync`)
     """
     try:
         star_obj = await reverse_lookup_simbad(ra=ra, dec=dec, radius_deg=radius)
         if star_obj is None:
             return JSONResponse({"found": False})
-        return JSONResponse({"found": True, "source": "SIMBAD_TAP", "object": star_obj})
+        return JSONResponse(
+            {
+                "found": True,
+                "source": star_obj.get("categoryLabel", "IRSA_SPHEREX_SIMBAD"),
+                "object": star_obj,
+            }
+        )
     except Exception as exc:
         return JSONResponse({"found": False, "error": str(exc)})
 
 
 @app.get("/api/astro/resolve")
-async def astro_resolve_name(q: str = Query(..., description="Celestial object name")):
+async def astro_resolve_name(q: str = Query(..., description="Celestial object name or SPLICES/2MASS/Gaia ID")):
     """
-    Live Astronomical Name Resolver via CDS Sesame + SIMBAD TAP Canonicalizer.
+    Unified Astronomical Name Resolver (100 Real IRSA SPHEREx Samples + CDS Sesame + SIMBAD TAP).
     Returns the exact same canonical object structure as `/api/astro/reverse`.
     """
     try:
         star_obj = await resolve_name_astronomical(q)
         if star_obj is None:
             return JSONResponse({"found": False})
-        return JSONResponse({"found": True, "source": "SESAME_SIMBAD_CANONICAL", "object": star_obj})
+        return JSONResponse(
+            {
+                "found": True,
+                "source": "IRSA_SPHEREX_CANONICAL",
+                "object": star_obj,
+            }
+        )
     except Exception as exc:
         return JSONResponse({"found": False, "error": str(exc)})
 

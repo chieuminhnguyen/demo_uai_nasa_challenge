@@ -1,0 +1,44 @@
+{
+  "id": "simbad_23578309",
+  "name": "NVSS J024708+170502",
+  "aliases": [
+    "nvss j024708+170502",
+    "tgssadr j024708.4+170502",
+    "gleam j024708+170501"
+  ],
+  "category": "wonder",
+  "categoryLabel": "🌟 SIMBAD (Rad • Near-IR Stellar Source)",
+  "rank": "SIMBAD Verified",
+  "ra": 41.78519,
+  "dec": 17.0839,
+  "epoch": 2000.0,
+  "pm_ra_arcsec_yr": 0.0,
+  "pm_dec_arcsec_yr": 0.0,
+  "defaultFov": 0.1,
+  "recommended_detectors": [
+    6,
+    5,
+    4,
+    3,
+    2,
+    1
+  ],
+  "distanceAU": "SIMBAD OID #23578309 (Δ=119.4\")",
+  "description": "Ngôi sao / Thiên thể xác thực từ danh mục SIMBAD Quốc tế (NVSS J024708+170502, Phân loại quang phổ: Near-IR Stellar Source, Loại: Rad).",
+  "colorTint": "#38bdf8",
+  "spectralType": "Near-IR Stellar Source (Rad)",
+  "telemetry": {
+    "obsTime": "2025-08-15T20:45:11Z",
+    "epoch": "DR1 (SPHEREx All-Sky Survey)",
+    "detectorArray": "Detector D6 (4.41–5.01 µm)",
+    "imageFlux": 19.03,
+    "zodiFlux": 6.28,
+    "variance": 0.02,
+    "psfFwhm": 6.18,
+    "snr": 64.0,
+    "qualityFlag": "CLEAN",
+    "qualityCode": "0x0000",
+    "qualityMessage": "🟢 SẠCH NHIỄU (Đã xác thực từ SIMBAD & NASA IRSA)"
+  },
+  "spectrumProfile": "stellar_hot"
+}
