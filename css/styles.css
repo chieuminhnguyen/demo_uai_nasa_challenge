@@ -1,0 +1,1150 @@
+/* ==========================================================================
+   NASA SPHEREx & PLANET X SKY EXPLORER - STYLESHEET
+   Giao diện chuẩn Sci-Fi Mission Control cho Phần A: Interactive Sky Map
+   ========================================================================== */
+
+:root {
+  --bg-deep: #050914;
+  --bg-panel: rgba(11, 19, 36, 0.92);
+  --bg-panel-solid: #0b1324;
+  --bg-input: #0f1b33;
+  --border-subtle: rgba(56, 189, 248, 0.24);
+  --border-bright: #38bdf8;
+  --accent-cyan: #38bdf8;
+  --accent-orange: #ff7b54;
+  --accent-green: #22c55e;
+  --accent-yellow: #eab308;
+  --accent-red: #f43f5e;
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-deep);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   1. TOP NAVIGATION & SMART SEARCH BAR (INPUT LAYER)
+   ========================================================================== */
+.top-header {
+  background: linear-gradient(180deg, rgba(13, 23, 44, 0.98) 0%, rgba(8, 15, 30, 0.95) 100%);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 50;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+}
+
+.header-main-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* Brand Identity */
+.brand-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 215px;
+}
+
+.brand-badge {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: radial-gradient(circle at 30% 30%, #38bdf8, #1d4ed8 65%, #0f172a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
+  border: 1px solid rgba(186, 230, 253, 0.5);
+}
+
+.brand-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  color: #ffffff;
+}
+
+.brand-subtitle {
+  font-size: 11px;
+  color: #7dd3fc;
+  font-family: var(--font-mono);
+}
+
+/* Search Bar Unified Container */
+.search-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  flex-wrap: wrap;
+  background: rgba(7, 13, 26, 0.85);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 7px 10px;
+}
+
+/* Khối 1: Tìm kiếm cơ bản theo Tên thiên thể + Gợi ý */
+.name-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1.15;
+  min-width: 250px;
+}
+
+.input-group-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #7dd3fc;
+  font-weight: 700;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.name-input-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.name-input-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.astro-input {
+  background: var(--bg-input);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: var(--text-main);
+  border-radius: 6px;
+  padding: 6px 9px;
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+  outline: none;
+  transition: all 0.18s ease;
+  width: 100%;
+}
+
+.astro-input:focus {
+  border-color: var(--border-bright);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+.astro-input.input-error {
+  border-color: var(--accent-red) !important;
+  box-shadow: 0 0 0 2px rgba(244, 63, 94, 0.3) !important;
+  background: rgba(244, 63, 94, 0.08);
+}
+
+.btn-secondary {
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #bae6fd;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.btn-secondary:hover {
+  background: rgba(56, 189, 248, 0.26);
+  color: #ffffff;
+}
+
+/* Divider giữa Tìm kiếm tên và 3 Ô Thông số */
+.search-divider {
+  width: 1px;
+  height: 36px;
+  background: rgba(148, 163, 184, 0.22);
+}
+
+/* Khối 2: 3 Ô Thông số RA, Dec, FOV */
+.coords-inputs-group {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex: 1.8;
+  flex-wrap: wrap;
+}
+
+.param-box {
+  display: flex;
+  flex-direction: column;
+  min-width: 128px;
+  flex: 1;
+}
+
+.param-box.fov-box {
+  min-width: 215px;
+  flex: 1.35;
+}
+
+.fov-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.astro-select {
+  background: var(--bg-input);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: var(--text-main);
+  border-radius: 6px;
+  padding: 6px 7px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  outline: none;
+  cursor: pointer;
+}
+
+.fov-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+}
+
+.fov-slider {
+  width: 100%;
+  accent-color: var(--accent-cyan);
+  cursor: pointer;
+}
+
+.fov-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #38bdf8;
+  min-width: 44px;
+  text-align: right;
+  font-weight: 700;
+}
+
+.btn-go {
+  background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+  border: 1px solid #7dd3fc;
+  color: #ffffff;
+  border-radius: 7px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.35);
+  transition: transform 0.12s ease, box-shadow 0.15s ease;
+  height: 35px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-go:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 22px rgba(56, 189, 248, 0.6);
+}
+
+/* Dropdown Bảng Xếp Hạng Thiên Thể (Curated Catalog) */
+.curated-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 620px;
+  max-width: 92vw;
+  background: rgba(10, 18, 36, 0.98);
+  border: 1px solid var(--border-bright);
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.8);
+  z-index: 120;
+  backdrop-filter: blur(12px);
+}
+
+.curated-dropdown.hidden {
+  display: none;
+}
+
+.curated-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.curated-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #bae6fd;
+}
+
+.cat-tabs {
+  display: flex;
+  gap: 5px;
+}
+
+.cat-tab {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 4px 9px;
+  border-radius: 99px;
+  cursor: pointer;
+}
+
+.cat-tab.active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: var(--accent-cyan);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.curated-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(275px, 1fr));
+  gap: 8px;
+  max-height: 310px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.curated-item {
+  background: rgba(15, 27, 51, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  padding: 9px 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.curated-item:hover,
+.curated-item.active {
+  border-color: var(--accent-cyan);
+  background: rgba(23, 42, 78, 0.9);
+  transform: translateY(-1px);
+}
+
+.curated-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.curated-rank {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid;
+}
+
+.curated-cat {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.curated-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 3px;
+}
+
+.curated-coords {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: #7dd3fc;
+  margin-bottom: 4px;
+}
+
+.curated-desc {
+  font-size: 11px;
+  color: #cbd5e1;
+  line-height: 1.35;
+}
+
+/* Validation Banner */
+.validation-banner {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.validation-banner.hidden {
+  display: none;
+}
+
+.validation-banner.error {
+  background: rgba(244, 63, 94, 0.16);
+  border: 1px solid var(--accent-red);
+  color: #fecdd3;
+}
+
+.validation-banner.warn {
+  background: rgba(234, 179, 8, 0.16);
+  border: 1px solid var(--accent-yellow);
+  color: #fef08a;
+}
+
+.validation-banner.info {
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid var(--accent-cyan);
+  color: #bae6fd;
+}
+
+/* ==========================================================================
+   2. MAIN WORKSPACE: MAP FRAME (OUTPUT 1) + INSPECTOR DRAWER (OUTPUT 2 & 3)
+   ========================================================================== */
+.workspace-main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+/* KHUNG BẢN ĐỒ TƯƠNG TÁC (MAP FRAME) */
+.map-frame-section {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #030712;
+  display: flex;
+  flex-direction: column;
+}
+
+#skyMapCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+
+#aladin-lite-div {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+}
+
+#aladin-lite-div.hidden {
+  display: none;
+}
+
+/* Top Overlay trên Bản đồ: Bộ lọc 4 chế độ Bước sóng thông minh */
+.map-top-overlay {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 20;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.preset-filters-bar,
+.map-status-group {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(9, 16, 32, 0.85);
+  border: 1px solid var(--border-subtle);
+  padding: 5px 8px;
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+}
+
+.preset-band-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #cbd5e1;
+  font-size: 11.5px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preset-band-btn:hover {
+  background: rgba(56, 189, 248, 0.12);
+  color: #ffffff;
+}
+
+.preset-band-btn.active {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: var(--accent-cyan);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.status-pill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 99px;
+  font-weight: 700;
+}
+
+.status-flying {
+  background: rgba(234, 179, 8, 0.2);
+  color: #fde047;
+  border: 1px solid #eab308;
+}
+
+.status-locked {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+  border: 1px solid #22c55e;
+}
+
+/* THẺ NỔI CẠNH TÂM NGẮM (FLOATING TARGET HUD CARD) */
+.floating-target-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 270px;
+  background: rgba(10, 19, 38, 0.92);
+  border: 1px solid var(--accent-cyan);
+  border-left: 4px solid var(--accent-orange);
+  border-radius: 8px;
+  padding: 9px 11px;
+  z-index: 18;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  transition: opacity 0.2s ease;
+}
+
+.card-cat-tag {
+  font-size: 10px;
+  color: #ff9a76;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.card-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.card-coords-deg {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.card-coords-hms {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.card-distance {
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+/* Bottom Overlay trên Bản đồ: Thanh điều khiển GPU Shader (Brightness / Contrast / 102 Bands) */
+.map-bottom-dock {
+  position: absolute;
+  bottom: 12px;
+  left: 150px;
+  right: 14px;
+  background: rgba(9, 16, 32, 0.9);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  z-index: 20;
+  backdrop-filter: blur(10px);
+  flex-wrap: wrap;
+}
+
+.shader-control-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: #cbd5e1;
+}
+
+.shader-control-item input[type="range"] {
+  width: 95px;
+  accent-color: var(--accent-cyan);
+  cursor: pointer;
+}
+
+.band-slider-item {
+  flex: 1;
+  min-width: 220px;
+}
+
+.band-slider-item input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent-orange);
+}
+
+.hover-coords-bar {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #7dd3fc;
+}
+
+/* ==========================================================================
+   3. INSPECTOR HUD DRAWER (OUTPUT 2: SYSTEM DATA & OUTPUT 3: URL SHARE)
+   ========================================================================== */
+.inspector-drawer {
+  width: 390px;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 12px 14px;
+  gap: 11px;
+  z-index: 25;
+}
+
+.drawer-section {
+  background: rgba(15, 25, 48, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 9px;
+  padding: 10px 12px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.section-title {
+  font-size: 11.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #38bdf8;
+}
+
+.section-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+/* Cutout + Target Overview */
+.cutout-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+#cutoutPreviewCanvas {
+  border-radius: 6px;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  flex-shrink: 0;
+}
+
+.target-meta-summary h3 {
+  font-size: 13.5px;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.target-meta-summary p {
+  font-size: 11.2px;
+  color: #cbd5e1;
+  line-height: 1.38;
+}
+
+/* Quality Flags Badge */
+.quality-badge {
+  display: block;
+  padding: 6px 9px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  margin-bottom: 7px;
+}
+
+.quality-clean {
+  background: rgba(34, 197, 94, 0.16);
+  border: 1px solid #22c55e;
+  color: #86efac;
+}
+
+.quality-warn {
+  background: rgba(234, 179, 8, 0.16);
+  border: 1px solid #eab308;
+  color: #fde047;
+}
+
+.quality-danger {
+  background: rgba(244, 63, 94, 0.18);
+  border: 1px solid #f43f5e;
+  color: #fda4af;
+}
+
+/* Telemetry Grid (6 FITS HDU Extensions) */
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.telemetry-cell {
+  background: rgba(8, 14, 28, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.telemetry-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  display: block;
+}
+
+.telemetry-val {
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+/* 102-Band Spectrum Canvas */
+#spectrumCanvas {
+  width: 100%;
+  height: 115px;
+  background: rgba(6, 11, 22, 0.85);
+  border-radius: 6px;
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  margin-top: 5px;
+}
+
+/* URL Share Box (Output 3) */
+.url-share-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.sync-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.sync-badge.syncing {
+  background: rgba(234, 179, 8, 0.2);
+  color: #fde047;
+}
+
+.sync-badge.synced {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+}
+
+.action-buttons-row {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-full {
+  flex: 1;
+  text-align: center;
+  justify-content: center;
+}
+
+/* ==========================================================================
+   4. COSMIC PLAYLISTS & TOUR PLAYER HUD STYLES
+   ========================================================================== */
+.btn-playlist-glow {
+  background: linear-gradient(135deg, rgba(255, 123, 84, 0.22) 0%, rgba(167, 139, 250, 0.25) 100%) !important;
+  border-color: #ff7b54 !important;
+  color: #fed7aa !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 10px rgba(255, 123, 84, 0.25);
+  animation: pulsePlaylistGlow 2.8s infinite ease-in-out;
+}
+
+@keyframes pulsePlaylistGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 123, 84, 0.3); }
+  50% { box-shadow: 0 0 16px rgba(167, 139, 250, 0.55); border-color: #c084fc !important; }
+}
+
+/* Modal Overlay */
+.playlists-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.playlists-modal.hidden {
+  display: none;
+}
+
+.playlists-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 7, 18, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.playlists-content {
+  position: relative;
+  width: 860px;
+  max-width: 94vw;
+  max-height: 88vh;
+  background: rgba(11, 19, 36, 0.98);
+  border: 1px solid var(--border-bright);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.playlists-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(15, 27, 51, 0.8);
+}
+
+.playlists-title-box h2 {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+}
+
+.playlists-title-box p {
+  font-size: 11.5px;
+  color: #7dd3fc;
+  margin-top: 2px;
+}
+
+.btn-close-modal {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+
+.btn-close-modal:hover {
+  background: rgba(244, 63, 94, 0.2);
+  color: #fda4af;
+}
+
+/* Albums Grid View */
+.playlists-albums-grid {
+  padding: 18px 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.playlist-album-card {
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  padding: 16px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 220px;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.playlist-album-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+}
+
+.album-badge {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.4);
+  display: inline-block;
+  margin-bottom: 8px;
+}
+
+.album-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.album-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.album-desc {
+  font-size: 11.5px;
+  color: #cbd5e1;
+  line-height: 1.4;
+  margin-bottom: 12px;
+  flex: 1;
+}
+
+.album-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 10px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* Playlist Detail View */
+.playlist-detail-view {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  gap: 14px;
+}
+
+.playlist-detail-view.hidden {
+  display: none;
+}
+
+.detail-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.playlist-detail-header {
+  border-radius: 10px;
+  padding: 14px 18px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.playlist-tracks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.track-item {
+  background: rgba(15, 27, 51, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  padding: 11px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.track-item:hover {
+  background: rgba(28, 48, 88, 0.95);
+  border-color: var(--accent-cyan);
+  transform: translateX(4px);
+}
+
+.track-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.track-num {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: #7dd3fc;
+  min-width: 20px;
+}
+
+.track-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.track-tagline {
+  font-size: 11.5px;
+  color: #cbd5e1;
+}
+
+.track-badge {
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  color: #ff9a76;
+  background: rgba(255, 123, 84, 0.14);
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 123, 84, 0.3);
+}
+
+/* Tour Player HUD at the bottom */
+.tour-player-hud {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(11, 20, 40, 0.94);
+  border: 1px solid var(--accent-orange);
+  border-radius: 12px;
+  padding: 8px 18px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  z-index: 100;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
+}
+
+.tour-player-hud.hidden {
+  display: none;
+}
+
+.tour-track-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tour-pulsing-disc {
+  font-size: 22px;
+  animation: rotateDisc 4s linear infinite;
+}
+
+@keyframes rotateDisc {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.tour-track-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.tour-track-subtitle {
+  font-size: 11px;
+  color: #7dd3fc;
+}
+
+.tour-progress-container {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 140px;
+}
+
+.tour-progress-bar {
+  width: 0%;
+  height: 4px;
+  background: linear-gradient(90deg, #ff7b54, #38bdf8);
+  border-radius: 2px;
+  transition: width 0.2s linear;
+}
+
+.tour-timer-label {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: #cbd5e1;
+}
+
+.tour-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-icon {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #ffffff;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.btn-icon:hover {
+  background: rgba(56, 189, 248, 0.3);
+}

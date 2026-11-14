@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NASA SPHEREx & Planet X — Interactive Sky Map (Demo Phần A)</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <!-- Aladin Lite v3 (Tùy chọn đối chiếu ảnh khảo sát bầu trời thực tế AllWISE từ CDS Strasbourg) -->
+  <script type="text/javascript" src="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js" charset="utf-8" defer></script>
+</head>
+<body>
+
+  <!-- ========================================================================
+       1. THANH TÌM KIẾM THÔNG MINH (INPUT LAYER: CƠ BẢN + CHUYÊN GIA 3 THÔNG SỐ)
+       ======================================================================== -->
+  <header class="top-header">
+    <div class="header-main-row">
+      <!-- Thương hiệu dự án -->
+      <div class="brand-box">
+        <div class="brand-badge">🛰️</div>
+        <div>
+          <div class="brand-title">SPHEREx SKY EXPLORER</div>
+          <div class="brand-subtitle">PLANET X HUNTER • PART A CORE</div>
+        </div>
+      </div>
+
+      <!-- Khung Search Bar tích hợp -->
+      <div class="search-bar-container">
+        
+        <!-- PHẦN 1: Tìm kiếm Cơ bản cho người mới (Bảng xếp hạng thiên thể + Name Resolver) -->
+        <div class="name-search-wrapper">
+          <div class="name-input-box">
+            <label class="input-group-label" for="nameSearchInput">
+              🌟 Tìm theo tên thiên thể (Dành cho người mới)
+            </label>
+            <div class="name-input-row">
+              <input
+                id="nameSearchInput"
+                type="text"
+                class="astro-input"
+                placeholder="VD: Sedna, Orion, Andromeda, Eris..."
+                autocomplete="off"
+              />
+              <button id="btnResolveName" class="btn-secondary" title="Tự động đổi tên thiên thể sang tọa độ RA & Dec">
+                🔍 Tìm tên
+              </button>
+              <button id="btnToggleCatalog" class="btn-secondary" title="Mở bảng xếp hạng các thiên thể được yêu thích nhất">
+                🏆 Top Gợi Ý ▾
+              </button>
+              <button id="btnOpenPlaylists" class="btn-secondary btn-playlist-glow" title="Khám phá vũ trụ qua các Cosmic Playlists chủ đề (kiểu Spotify)">
+                🎧 Cosmic Playlists
+              </button>
+            </div>
+          </div>
+
+          <!-- Dropdown Bảng Xếp Hạng & Đề Xuất Thiên Thể (Curated Database 0ms) -->
+          <div id="curatedDropdown" class="curated-dropdown hidden">
+            <div class="curated-header">
+              <span class="curated-title">🏆 Bảng Xếp Hạng Thiên Thể Nổi Bật (Click để tự điền RA/Dec & Bay tới ngay)</span>
+              <div class="cat-tabs">
+                <button class="cat-tab active" data-cat="all">Tất cả</button>
+                <button class="cat-tab" data-cat="benchmark">🧪 Benchmark NASA (5)</button>
+                <button class="cat-tab" data-cat="planet-x">🎯 Săn Planet X</button>
+                <button class="cat-tab" data-cat="wonder">🌌 Kỳ quan Vũ trụ</button>
+                <button class="cat-tab" data-cat="brown-dwarf">🪐 Sao lùn nâu</button>
+              </div>
+            </div>
+            <div id="curatedGrid" class="curated-grid"></div>
+          </div>
+        </div>
+
+        <div class="search-divider"></div>
+
+        <!-- PHẦN 2: 3 Ô Thông Số Đầu Vào (Ô 1: RA, Ô 2: Dec, Ô 3: FOV + Nút Go/Search) -->
+        <div class="coords-inputs-group">
+          
+          <!-- Ô 1: RA (Right Ascension - Xích kinh) -->
+          <div class="param-box">
+            <label class="input-group-label" for="raInput">
+              Ô 1: RA (Xích kinh 0°→360°)
+            </label>
+            <input
+              id="raInput"
+              type="text"
+              class="astro-input"
+              placeholder="VD: 56.839 hoặc 03h47m21s"
+              value="56.8392"
+            />
+          </div>
+
+          <!-- Ô 2: Dec (Declination - Xích vĩ) -->
+          <div class="param-box">
+            <label class="input-group-label" for="decInput">
+              Ô 2: Dec (Xích vĩ -90°→+90°)
+            </label>
+            <input
+              id="decInput"
+              type="text"
+              class="astro-input"
+              placeholder="VD: +11.964 hoặc +11d57m50s"
+              value="11.9644"
+            />
+          </div>
+
+          <!-- Ô 3: FOV (Field of View - Góc mở quan sát / Mức thu phóng) -->
+          <div class="param-box fov-box">
+            <label class="input-group-label" for="fovSelect">
+              Ô 3: FOV (Phạm vi nhìn / Zoom Level)
+            </label>
+            <div class="fov-controls-row">
+              <select id="fovSelect" class="astro-select" title="Chọn nhanh góc mở quan sát">
+                <option value="0.05">0.05° (Siêu cận)</option>
+                <option value="0.1">0.10° (Cận cảnh)</option>
+                <option value="0.25" selected>0.25° (Mặc định chuẩn)</option>
+                <option value="0.5">0.50° (Trung cảnh)</option>
+                <option value="1">1.00° (Góc rộng)</option>
+                <option value="5">5.00° (Vùng bầu trời)</option>
+                <option value="20">20.0° (Toàn cảnh)</option>
+                <option value="custom">Tùy chỉnh</option>
+              </select>
+              <div class="fov-slider-wrap">
+                <input
+                  id="fovSlider"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value="38"
+                  class="fov-slider"
+                  title="Kéo thanh trượt để thu phóng FOV (0.02° đến 60°)"
+                />
+                <span id="fovValueLabel" class="fov-badge">0.25°</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Nút bấm Search / Go (hoặc nhấn Enter) -->
+          <button id="btnSearchGo" class="btn-go" title="Thực thi tìm kiếm & bay camera đến tọa độ (Phím Enter)">
+            🚀 Go / Search
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Thanh cảnh báo Kiểm tra giới hạn (Validation / Auto-conversion Banner) -->
+    <div id="validationBanner" class="validation-banner hidden">
+      <span id="validationText"></span>
+    </div>
+  </header>
+
+  <!-- ========================================================================
+       2. KHÔNG GIAN LÀM VIỆC CHÍNH: KHUNG BẢN ĐỒ (OUTPUT 1) + INSPECTOR (OUTPUT 2 & 3)
+       ======================================================================== -->
+  <main class="workspace-main">
+    
+    <!-- PHẦN DIỆN TÍCH (FRAME) NHÚNG BẢN ĐỒ TƯƠNG TÁC (OUTPUT 1: VISUAL OUTPUT) -->
+    <section class="map-frame-section">
+      
+      <!-- Thanh công cụ phía trên bản đồ: Bộ lọc 4 chế độ Bước sóng thông minh -->
+      <div class="map-top-overlay">
+        <div class="preset-filters-bar">
+          <span style="font-size:11px; color:#7dd3fc; font-weight:700; margin-right:4px;">🔬 Kính lọc phổ SPHEREx:</span>
+          <button class="preset-band-btn" data-band="12">🌟 Sao & Thiên hà (1.2 µm)</button>
+          <button class="preset-band-btn active" data-band="42">🌫️ Xuyên Bụi Ngân Hà (2.46 µm)</button>
+          <button class="preset-band-btn" data-band="56">🧊 Dò Băng Nước H₂O (3.08 µm)</button>
+          <button class="preset-band-btn" data-band="90">🪐 Săn Hành Tinh Lạnh / Sao Lùn Nâu (4.50 µm)</button>
+        </div>
+
+        <div class="map-status-group">
+          <span id="flightStatusBadge" class="status-pill status-locked">🎯 ĐÃ KHÓA MỤC TIÊU (TARGET LOCKED)</span>
+          <button id="btnSwitchAladin" class="btn-secondary">🛰️ Xem lớp ảnh AllWISE (Aladin Lite)</button>
+        </div>
+      </div>
+
+      <!-- Canvas Bản đồ Bầu trời Tương tác (Kéo thả Pan, Lăn chuột Zoom, Nhấp đúp chọn điểm) -->
+      <canvas id="skyMapCanvas"></canvas>
+
+      <!-- Khung Aladin Lite v3 dự phòng cho chế độ đối chiếu ảnh thật -->
+      <div id="aladin-lite-div" class="hidden"></div>
+
+      <!-- Thẻ Nổi Chú Thích Cạnh Tâm Ngắm (Floating Target HUD Card) -->
+      <div id="floatingTargetCard" class="floating-target-card">
+        <div id="cardCategory" class="card-cat-tag">🎯 Ứng viên săn Planet X</div>
+        <div id="cardTitle" class="card-title">90377 Sedna</div>
+        <div id="cardCoordsDeg" class="card-coords-deg">RA: 56.8392° | Dec: +11.9644°</div>
+        <div id="cardCoordsHMS" class="card-coords-hms">03h 47m 21.4s • +11° 57' 51.8"</div>
+        <div id="cardDistance" class="card-distance">Khoảng cách: 84.2 AU</div>
+      </div>
+
+      <!-- Thanh Điều Khiển Tương Tác Canvas phía dưới (GPU Brightness/Contrast + 102 Dải Sóng) -->
+      <div class="map-bottom-dock">
+        <div class="shader-control-item">
+          <span>☀️ Độ sáng:</span>
+          <input id="brightnessSlider" type="range" min="-40" max="45" value="0" />
+        </div>
+
+        <div class="shader-control-item">
+          <span>◐ Tương phản:</span>
+          <input id="contrastSlider" type="range" min="0.5" max="2.4" step="0.05" value="1.15" />
+        </div>
+
+        <button id="btnAutoContrast" class="btn-secondary" title="Tự động cân bằng sáng dựa trên Metadata Độ sáng nền (ZODI)">
+          ✨ Auto-Contrast
+        </button>
+
+        <div class="shader-control-item">
+          <label style="cursor:pointer; display:flex; align-items:center; gap:5px;">
+            <input id="toggleZodi" type="checkbox" />
+            <span>Khử bụi Hoàng Đạo (ZODI)</span>
+          </label>
+        </div>
+
+        <div class="shader-control-item">
+          <label style="cursor:pointer; display:flex; align-items:center; gap:5px;">
+            <input id="toggleGrid" type="checkbox" checked />
+            <span>Lưới RA/Dec</span>
+          </label>
+        </div>
+
+        <div class="shader-control-item band-slider-item">
+          <span id="bandLabel" style="font-family:var(--font-mono); color:#ff9a76; min-width:210px;">
+            Band 42/102 (2.46 µm • Array 3)
+          </span>
+          <input id="bandSlider" type="range" min="1" max="102" value="42" />
+        </div>
+
+        <div id="hoverCoordsText" class="hover-coords-bar">
+          Con trỏ: Kéo chuột để Pan • Lăn chuột để Zoom • Nhấp đúp để chọn điểm
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ======================================================================
+         3. INSPECTOR HUD DRAWER (OUTPUT 2: DỮ LIỆU HỆ THỐNG & OUTPUT 3: URL SHARE)
+         ====================================================================== -->
+    <aside class="inspector-drawer">
+      
+      <!-- KHỐI 1: Gói ảnh cắt (Image Cutout) & Định danh thiên thể -->
+      <div class="drawer-section">
+        <div class="section-header">
+          <span class="section-title">📦 OUTPUT 2A: GÓI ẢNH CẮT (IRSA CUTOUT)</span>
+          <span id="hudEpoch" class="section-tag">DR1 (Epoch 1)</span>
+        </div>
+        <div class="cutout-row">
+          <canvas id="cutoutPreviewCanvas" width="96" height="96"></canvas>
+          <div class="target-meta-summary">
+            <h3 id="hudObjectName">90377 Sedna</h3>
+            <p id="hudObjectDesc">Thiên thể xa xôi có quỹ đạo lệch tâm kỳ dị nhất Hệ Mặt Trời.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- KHỐI 2: Kiểm định Cờ Chất Lượng (FLAGS HDU) -->
+      <div class="drawer-section">
+        <div class="section-header">
+          <span class="section-title">🛡️ KIỂM ĐỊNH CHẤT LƯỢNG ẢNH (HDU 4: FLAGS)</span>
+          <span id="hudQualityCode" class="section-tag">Bitmask: 0x0000</span>
+        </div>
+        <div id="hudQualityPill" class="quality-badge quality-clean">
+          🟢 SẠCH NHIỄU (100% Clean Pixel - Tín hiệu chuẩn khoa học)
+        </div>
+        <div style="font-size:11px; color:#94a3b8;">
+          Giúp phân biệt thiên thể thật với nhiễu cảm biến hoặc Tia vũ trụ (Cosmic Ray). Hãy thử chọn <b>Eris</b> ở bảng gợi ý để xem cảnh báo Tia vũ trụ!
+        </div>
+      </div>
+
+      <!-- KHỐI 3: Thông số 6 Lớp Multi-Extension FITS (Metadata Telemetry) -->
+      <div class="drawer-section">
+        <div class="section-header">
+          <span class="section-title">📊 6 LỚP DỮ LIỆU MULTI-EXTENSION FITS</span>
+          <span class="section-tag">Lv2 Calibrated</span>
+        </div>
+        <div class="telemetry-grid">
+          <div class="telemetry-cell">
+            <span class="telemetry-label">🕒 Thời gian chụp (OBS-TIME)</span>
+            <span id="hudObsTime" class="telemetry-val">2025-05-14T08:42:19Z</span>
+          </div>
+          <div class="telemetry-cell">
+            <span class="telemetry-label">📷 Cảm biến (6 DETECTORS)</span>
+            <span id="hudDetector" class="telemetry-val">Array 4 & 5</span>
+          </div>
+          <div class="telemetry-cell">
+            <span class="telemetry-label">💡 HDU 1: IMAGE (Độ sáng)</span>
+            <span id="hudImageFlux" class="telemetry-val">18.42 MJy/sr</span>
+          </div>
+          <div class="telemetry-cell">
+            <span class="telemetry-label">🌫️ HDU 5: ZODI (Sáng nền)</span>
+            <span id="hudZodiFlux" class="telemetry-val">4.15 MJy/sr</span>
+          </div>
+          <div class="telemetry-cell">
+            <span class="telemetry-label">📉 HDU 3: VARIANCE (Sai số)</span>
+            <span id="hudVariance" class="telemetry-val">±0.018 MJy/sr²</span>
+          </div>
+          <div class="telemetry-cell">
+            <span class="telemetry-label">🎯 HDU 6: EPSF & SNR</span>
+            <span id="hudSnr" class="telemetry-val">64.5 (98.4%)</span>
+          </div>
+        </div>
+        <div style="display:none;" id="hudPsf"></div>
+      </div>
+
+      <!-- KHỐI 4: Biểu đồ 102 Dải Bước Sóng (HDU 2: WCS-WAVE) -->
+      <div class="drawer-section">
+        <div class="section-header">
+          <span class="section-title">🌈 HDU 2: WCS-WAVE (PHỔ 102 KÊNH 0.75–5.0µm)</span>
+        </div>
+        <div id="hudSpectralType" style="font-size:11px; color:#7dd3fc; font-weight:600; margin-bottom:4px;">
+          Methane & Water Ice Rich
+        </div>
+        <canvas id="spectrumCanvas" width="340" height="115"></canvas>
+        <div class="action-buttons-row" style="margin-top:8px;">
+          <button id="btnDownloadFits" class="btn-secondary btn-full">
+            📥 Tải Raw .FITS Cutout
+          </button>
+          <button id="btnDownloadPng" class="btn-secondary btn-full">
+            🖼️ Xuất ảnh .PNG
+          </button>
+        </div>
+      </div>
+
+      <!-- KHỐI 5: OUTPUT 3 - Chia sẻ Trạng thái URL (URL State Output cho Người thứ 3) -->
+      <div class="drawer-section">
+        <div class="section-header">
+          <span class="section-title">🔗 OUTPUT 3: CHIA SẺ GÓC NHÌN (URL STATE)</span>
+          <span id="urlSyncBadge" class="sync-badge synced">✅ Đã đồng bộ URL</span>
+        </div>
+        <div style="font-size:11px; color:#cbd5e1;">
+          Tự động cập nhật thanh địa chỉ (Debounce 300ms). Gửi link này cho đồng đội để mở ra đúng tọa độ đang xem:
+        </div>
+        <div class="url-share-row">
+          <input id="shareUrlInput" type="text" class="astro-input" readonly />
+          <button id="btnCopyUrl" class="btn-secondary">🔗 Copy Link</button>
+        </div>
+      </div>
+
+    </aside>
+  </main>
+
+  <!-- ========================================================================
+       4. MODAL COSMIC PLAYLISTS (SPOTIFY CỦA VŨ TRỤ)
+       ======================================================================== -->
+  <div id="cosmicPlaylistsModal" class="playlists-modal hidden">
+    <div class="playlists-backdrop" id="playlistsBackdrop"></div>
+    <div class="playlists-content">
+      <div class="playlists-modal-header">
+        <div class="playlists-title-box">
+          <h2>🎧 COSMIC PLAYLISTS — KHÁM PHÁ THEO CHỦ ĐỀ</h2>
+          <p>Dành cho người mới tiếp cận: Trải nghiệm vũ trụ qua những câu chuyện hấp dẫn nhất của kính SPHEREx</p>
+        </div>
+        <button id="btnClosePlaylists" class="btn-close-modal">✕</button>
+      </div>
+
+      <!-- Danh sách Playlists (Album Cards) -->
+      <div id="playlistsAlbumView" class="playlists-albums-grid"></div>
+
+      <!-- Xem chi tiết 1 Playlist & Tracklist -->
+      <div id="playlistDetailView" class="playlist-detail-view hidden">
+        <div class="detail-nav-bar">
+          <button id="btnBackToAlbums" class="btn-secondary">◀ Quay lại Tất cả Playlists</button>
+          <div class="detail-actions">
+            <button id="btnStartTourMode" class="btn-go" style="height:32px; font-size:12px;">
+              ▶️ Bắt đầu Tour tự động (Autoplay)
+            </button>
+          </div>
+        </div>
+        <div id="playlistDetailHeader" class="playlist-detail-header"></div>
+        <div id="playlistTracksList" class="playlist-tracks-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       5. FLOATING TOUR PLAYER HUD (THANH PHÁT TOUR TỰ ĐỘNG)
+       ======================================================================== -->
+  <div id="tourPlayerHUD" class="tour-player-hud hidden">
+    <div class="tour-track-info">
+      <div class="tour-pulsing-disc">🪐</div>
+      <div>
+        <div id="tourTrackTitle" class="tour-track-title">Đang phát: 90377 Sedna</div>
+        <div id="tourTrackTagline" class="tour-track-subtitle">Vết tích số 1 dẫn tới Planet X</div>
+      </div>
+    </div>
+
+    <!-- Thanh tiến trình thời gian chuyển cảnh -->
+    <div class="tour-progress-container">
+      <div id="tourProgressBar" class="tour-progress-bar"></div>
+      <span id="tourTimerLabel" class="tour-timer-label">Chuyển điểm sau: 6s</span>
+    </div>
+
+    <div class="tour-controls">
+      <button id="btnTourPrev" class="btn-icon" title="Thiên thể trước">⏮️</button>
+      <button id="btnTourToggle" class="btn-icon btn-play-pause" title="Tạm dừng / Tiếp tục">⏸️</button>
+      <button id="btnTourNext" class="btn-icon" title="Thiên thể kế tiếp">⏭️</button>
+      <button id="btnTourStop" class="btn-secondary" style="padding:4px 8px; font-size:11px;" title="Dừng tour">✕ Thoát</button>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/curated-data.js"></script>
+  <script src="js/validator.js"></script>
+  <script src="js/sky-engine.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
