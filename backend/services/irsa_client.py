@@ -81,6 +81,38 @@ def _find_cached_file(relative_subpath: str) -> Optional[Path]:
     return None
 
 
+def _find_cached_sia_file(ra: float, dec: float, radius: float = 0.05) -> Optional[Path]:
+    """
+    Find a cached SIA CSV by exact filename or by nearest angular distance within search radius.
+    This handles coordinate rounding and minor proper-motion differences across releases.
+    """
+    cache_name = f"sia_{ra:.4f}_{dec:.4f}_{radius:.3f}.csv"
+    exact = _find_cached_file(f"sia/{cache_name}")
+    if exact is not None:
+        return exact
+
+    best_file: Optional[Path] = None
+    min_dist = radius
+    for folder in [BACKEND_CACHE_DIR / "sia", LEGACY_CACHE_DIR / "sia"]:
+        if not folder.exists():
+            continue
+        for p in folder.glob("sia_*.csv"):
+            if p.stat().st_size <= 64:
+                continue
+            parts = p.stem.split("_")
+            if len(parts) >= 3:
+                try:
+                    f_ra = float(parts[1])
+                    f_dec = float(parts[2])
+                    dist = angular_distance_deg(ra, dec, f_ra, f_dec)
+                    if dist <= min_dist:
+                        min_dist = dist
+                        best_file = p
+                except (ValueError, IndexError):
+                    continue
+    return best_file
+
+
 async def query_irsa_sia_csv(
     ra: float,
     dec: float,
@@ -92,7 +124,7 @@ async def query_irsa_sia_csv(
     Returns raw CSV text and caches locally in `backend/cache/sia/`.
     """
     cache_name = f"sia_{ra:.4f}_{dec:.4f}_{radius:.3f}.csv"
-    existing = _find_cached_file(f"sia/{cache_name}")
+    existing = _find_cached_sia_file(ra, dec, radius)
     if existing is not None:
         return existing.read_text(encoding="utf-8", errors="replace")
 

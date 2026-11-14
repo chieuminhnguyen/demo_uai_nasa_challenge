@@ -1,0 +1,43 @@
+{
+  "id": "simbad_21074252",
+  "name": "Gaia DR3 36692322224212352",
+  "aliases": [
+    "gaia dr2 36692322224212352",
+    "gaia dr3 36692322224212352"
+  ],
+  "category": "wonder",
+  "categoryLabel": "🌟 SIMBAD (* • Near-IR Stellar Source)",
+  "rank": "SIMBAD Verified",
+  "ra": 57.354894,
+  "dec": 11.598941,
+  "epoch": 2000.0,
+  "pm_ra_arcsec_yr": -0.0002,
+  "pm_dec_arcsec_yr": -0.0001,
+  "defaultFov": 0.1,
+  "recommended_detectors": [
+    6,
+    5,
+    4,
+    3,
+    2,
+    1
+  ],
+  "distanceAU": "SIMBAD OID #21074252 (Δ=189.8\")",
+  "description": "Ngôi sao / Thiên thể xác thực từ danh mục SIMBAD Quốc tế (Gaia DR3 36692322224212352, Phân loại quang phổ: Near-IR Stellar Source, Loại: *).",
+  "colorTint": "#38bdf8",
+  "spectralType": "Near-IR Stellar Source (*)",
+  "telemetry": {
+    "obsTime": "2025-08-15T20:45:11Z",
+    "epoch": "DR1 (SPHEREx All-Sky Survey)",
+    "detectorArray": "Detector D6 (4.41–5.01 µm)",
+    "imageFlux": 45.5,
+    "zodiFlux": 4.3,
+    "variance": 0.02,
+    "psfFwhm": 6.18,
+    "snr": 64.0,
+    "qualityFlag": "CLEAN",
+    "qualityCode": "0x0000",
+    "qualityMessage": "🟢 SẠCH NHIỄU (Đã xác thực từ SIMBAD & NASA IRSA)"
+  },
+  "spectrumProfile": "stellar_hot"
+}

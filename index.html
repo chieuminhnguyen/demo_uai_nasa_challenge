@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NASA SPHEREx & Planet X — Interactive Sky Map (Demo Phần A)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Rajdhani:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css" />
   <!-- Aladin Lite v3 (Tùy chọn đối chiếu ảnh khảo sát bầu trời thực tế AllWISE từ CDS Strasbourg) -->
   <script type="text/javascript" src="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js" charset="utf-8" defer></script>
@@ -18,10 +21,7 @@
       <!-- Thương hiệu dự án -->
       <div class="brand-box">
         <div class="brand-badge">🛰️</div>
-        <div>
-          <div class="brand-title">SPHEREx SKY EXPLORER</div>
-          <div class="brand-subtitle">PLANET X HUNTER • PART A CORE</div>
-        </div>
+        <div class="brand-title">SPHEREx</div>
       </div>
 
       <!-- Khung Search Bar tích hợp -->
@@ -46,9 +46,6 @@
               </button>
               <button id="btnToggleCatalog" class="btn-secondary" title="Mở bảng xếp hạng các thiên thể được yêu thích nhất">
                 🏆 Top Gợi Ý ▾
-              </button>
-              <button id="btnOpenPlaylists" class="btn-secondary btn-playlist-glow" title="Khám phá vũ trụ qua các Cosmic Playlists chủ đề (kiểu Spotify)">
-                🎧 Cosmic Playlists
               </button>
             </div>
           </div>
@@ -75,10 +72,10 @@
         <!-- PHẦN 2: 3 Ô Thông Số Đầu Vào (Ô 1: RA, Ô 2: Dec, Ô 3: FOV + Nút Go/Search) -->
         <div class="coords-inputs-group">
           
-          <!-- Ô 1: RA (Right Ascension - Xích kinh) -->
+          <!-- Ô 1: RA (0°→360°) -->
           <div class="param-box">
             <label class="input-group-label" for="raInput">
-              Ô 1: RA (Xích kinh 0°→360°)
+              Ô 1: RA (0°→360°)
             </label>
             <input
               id="raInput"
@@ -89,10 +86,10 @@
             />
           </div>
 
-          <!-- Ô 2: Dec (Declination - Xích vĩ) -->
+          <!-- Ô 2: Dec (-90°→+90°) -->
           <div class="param-box">
             <label class="input-group-label" for="decInput">
-              Ô 2: Dec (Xích vĩ -90°→+90°)
+              Ô 2: Dec (-90°→+90°)
             </label>
             <input
               id="decInput"
@@ -103,20 +100,20 @@
             />
           </div>
 
-          <!-- Ô 3: FOV (Field of View - Góc mở quan sát / Mức thu phóng) -->
+          <!-- Ô 3: FOV (Zoom Level) -->
           <div class="param-box fov-box">
             <label class="input-group-label" for="fovSelect">
-              Ô 3: FOV (Phạm vi nhìn / Zoom Level)
+              Ô 3: FOV (Zoom Level)
             </label>
             <div class="fov-controls-row">
-              <select id="fovSelect" class="astro-select" title="Chọn nhanh góc mở quan sát">
-                <option value="0.05">0.05° (Siêu cận)</option>
-                <option value="0.1">0.10° (Cận cảnh)</option>
-                <option value="0.25" selected>0.25° (Mặc định chuẩn)</option>
-                <option value="0.5">0.50° (Trung cảnh)</option>
-                <option value="1">1.00° (Góc rộng)</option>
-                <option value="5">5.00° (Vùng bầu trời)</option>
-                <option value="20">20.0° (Toàn cảnh)</option>
+              <select id="fovSelect" class="astro-select fov-select" title="Chọn nhanh góc mở quan sát">
+                <option value="0.05">0.05°</option>
+                <option value="0.1">0.10°</option>
+                <option value="0.25" selected>0.25° (Chuẩn)</option>
+                <option value="0.5">0.50°</option>
+                <option value="1">1.00°</option>
+                <option value="5">5.00°</option>
+                <option value="20">20.0°</option>
                 <option value="custom">Tùy chỉnh</option>
               </select>
               <div class="fov-slider-wrap">
@@ -134,9 +131,9 @@
             </div>
           </div>
 
-          <!-- Nút bấm Search / Go (hoặc nhấn Enter) -->
+          <!-- Nút bấm Search (hoặc nhấn Enter) -->
           <button id="btnSearchGo" class="btn-go" title="Thực thi tìm kiếm & bay camera đến tọa độ (Phím Enter)">
-            🚀 Go / Search
+            Search
           </button>
         </div>
 
@@ -157,22 +154,6 @@
     <!-- PHẦN DIỆN TÍCH (FRAME) NHÚNG BẢN ĐỒ TƯƠNG TÁC (OUTPUT 1: VISUAL OUTPUT) -->
     <section class="map-frame-section">
       
-      <!-- Thanh công cụ phía trên bản đồ: Bộ lọc 4 chế độ Bước sóng thông minh -->
-      <div class="map-top-overlay">
-        <div class="preset-filters-bar">
-          <span style="font-size:11px; color:#7dd3fc; font-weight:700; margin-right:4px;">🔬 Kính lọc phổ SPHEREx:</span>
-          <button class="preset-band-btn" data-band="12">🌟 Sao & Thiên hà (1.2 µm)</button>
-          <button class="preset-band-btn active" data-band="42">🌫️ Xuyên Bụi Ngân Hà (2.46 µm)</button>
-          <button class="preset-band-btn" data-band="56">🧊 Dò Băng Nước H₂O (3.08 µm)</button>
-          <button class="preset-band-btn" data-band="90">🪐 Săn Hành Tinh Lạnh / Sao Lùn Nâu (4.50 µm)</button>
-        </div>
-
-        <div class="map-status-group">
-          <span id="flightStatusBadge" class="status-pill status-locked">🎯 ĐÃ KHÓA MỤC TIÊU (TARGET LOCKED)</span>
-          <button id="btnSwitchAladin" class="btn-secondary">🛰️ Xem lớp ảnh AllWISE (Aladin Lite)</button>
-        </div>
-      </div>
-
       <!-- Canvas Bản đồ Bầu trời Tương tác (Kéo thả Pan, Lăn chuột Zoom, Nhấp đúp chọn điểm) -->
       <canvas id="skyMapCanvas"></canvas>
 
@@ -237,32 +218,77 @@
          ====================================================================== -->
     <aside class="inspector-drawer">
       
-      <!-- KHỐI 1: Gói ảnh cắt (Image Cutout) & Định danh thiên thể -->
+      <!-- KHỐI 1: BỘ CHỌN ĐA THỜI ĐIỂM & ĐA PHỔ (DUAL-EPOCH & BAND SELECTOR) -->
       <div class="drawer-section">
         <div class="section-header">
-          <span class="section-title">📦 OUTPUT 2A: GÓI ẢNH CẮT (IRSA CUTOUT)</span>
-          <span id="hudEpoch" class="section-tag">DR1 (Epoch 1)</span>
+          <span class="section-title">⏱️ 1. SO SÁNH ĐA THỜI ĐIỂM & ĐA PHỔ</span>
+          <span id="hudEpochBadge" class="section-tag">MULTI-EPOCH</span>
         </div>
-        <div id="irsaLiveStatusRow" style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:6px;">
+
+        <!-- Trạng thái kết nối NASA IRSA -->
+        <div id="irsaLiveStatusRow" style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:8px;">
           <span id="irsaLiveBadge" class="sync-badge syncing" style="font-size:10px; padding:2px 7px;">
             🛰️ NASA IRSA SIAv2: Đang kết nối...
           </span>
           <span id="irsaFrameCountBadge" style="font-size:10px; color:#7dd3fc; font-family:var(--font-mono);"></span>
         </div>
-        <div class="cutout-row">
-          <canvas id="cutoutPreviewCanvas" width="96" height="96"></canvas>
-          <div class="target-meta-summary">
-            <h3 id="hudObjectName">90377 Sedna</h3>
-            <p id="hudObjectDesc">Thiên thể xa xôi có quỹ đạo lệch tâm kỳ dị nhất Hệ Mặt Trời.</p>
+
+        <!-- PHẦN A: BỘ LỌC 6 CẢM BIẾN DETECTOR (D1 ĐẾN D6) -->
+        <div class="epoch-control-group">
+          <label class="epoch-label">🔬 DẢI PHỔ QUAN SÁT (DETECTOR D1–D6):</label>
+          <div id="detectorPillsBar" class="detector-pills-row">
+            <button type="button" class="det-pill-btn" data-det="1" title="D1: 0.75 - 1.11 µm">D1</button>
+            <button type="button" class="det-pill-btn" data-det="2" title="D2: 1.11 - 1.63 µm">D2</button>
+            <button type="button" class="det-pill-btn" data-det="3" title="D3: 1.63 - 2.43 µm">D3</button>
+            <button type="button" class="det-pill-btn" data-det="4" title="D4: 2.43 - 3.82 µm (Băng nước H2O)">D4</button>
+            <button type="button" class="det-pill-btn" data-det="5" title="D5: 3.82 - 4.42 µm">D5</button>
+            <button type="button" class="det-pill-btn active" data-det="6" title="D6: 4.41 - 5.01 µm (Thiên thể lạnh / Planet X)">D6 🎯</button>
           </div>
         </div>
-        <div id="irsaFrameSelectorWrap" style="margin-top:6px;">
-          <label for="irsaFrameSelect" style="font-size:10px; color:#94a3b8; display:block; margin-bottom:3px;">
-            🎞️ Chọn Frame FITS thật từ kho lưu trữ NASA IRSA (SIAv2):
-          </label>
-          <select id="irsaFrameSelect" class="astro-select" style="width:100%; height:28px; font-size:11px;">
-            <option value="">Đang truy vấn danh mục SPHEREx DR1/QR3...</option>
-          </select>
+
+        <!-- PHẦN B: CHỌN CẶP THỜI ĐIỂM (T1 vs T2) -->
+        <div class="epoch-control-group" style="margin-top:8px;">
+          <div class="dual-epoch-grid">
+            <!-- Cột T1 -->
+            <div class="epoch-box epoch-box-t1">
+              <div class="epoch-tag tag-t1">T1: BASELINE (GỐC)</div>
+              <select id="epochSelectT1" class="astro-select select-epoch" title="Chọn thời điểm quan sát ban đầu"></select>
+            </div>
+            <!-- Cột T2 -->
+            <div class="epoch-box epoch-box-t2">
+              <div class="epoch-tag tag-t2">T2: FOLLOW-UP (MỚI)</div>
+              <select id="epochSelectT2" class="astro-select select-epoch" title="Chọn thời điểm quan sát đối chứng"></select>
+            </div>
+          </div>
+        </div>
+
+        <!-- PHẦN C: THANH THỐNG KÊ BASELINE & NÚT AUTO MAX BASELINE -->
+        <div class="baseline-action-row">
+          <span id="baselineStatsBadge" class="baseline-badge">⏱️ Baseline: Δt = 0.0 ngày</span>
+          <button type="button" id="btnAutoMaxBaseline" class="btn-micro" title="Tự động chọn 2 frame có khoảng cách thời gian lớn nhất">
+            ⚡ Max Baseline
+          </button>
+        </div>
+
+        <!-- PHẦN D: DUAL CANVAS PREVIEW (HIỂN THỊ 2 ẢNH CẮT FITS TO RÕ T1 VÀ T2) -->
+        <div class="dual-cutout-preview-row">
+          <div class="cutout-preview-card card-t1" title="Nhấp đúp (Double-Click) để phóng to toàn cảnh ảnh T1">
+            <span class="preview-mini-tag">T1 FITS <span class="zoom-hint-icon">🔍</span></span>
+            <canvas id="cutoutCanvasT1" width="140" height="140"></canvas>
+            <span id="epochDateLabelT1" class="preview-date-label">--</span>
+          </div>
+          <div class="cutout-vs-divider">⚡</div>
+          <div class="cutout-preview-card card-t2" title="Nhấp đúp (Double-Click) để phóng to toàn cảnh ảnh T2">
+            <span class="preview-mini-tag">T2 FITS <span class="zoom-hint-icon">🔍</span></span>
+            <canvas id="cutoutCanvasT2" width="140" height="140"></canvas>
+            <span id="epochDateLabelT2" class="preview-date-label">--</span>
+          </div>
+        </div>
+
+        <!-- Tóm tắt thiên thể đang chọn -->
+        <div class="target-meta-summary" style="margin-top:8px;">
+          <h3 id="hudObjectName">90377 Sedna</h3>
+          <p id="hudObjectDesc">Thiên thể xa xôi có quỹ đạo lệch tâm kỳ dị nhất Hệ Mặt Trời.</p>
         </div>
       </div>
 
@@ -411,12 +437,156 @@
     </div>
   </div>
 
+  <!-- ========================================================================
+       6. CỬA SỔ PHÓNG TO & SO SÁNH ẢNH TO RÕ CHO NGƯỜI MỚI (DUAL VIEW MODES)
+       ======================================================================== -->
+  <div id="fitsZoomModal" class="fits-zoom-modal hidden">
+    <div class="fits-zoom-backdrop" id="fitsZoomBackdrop"></div>
+    <div class="fits-zoom-container wide-compare-modal">
+      
+      <!-- Header Modal -->
+      <div class="fits-zoom-header">
+        <div class="fits-zoom-title-group">
+          <div class="fits-zoom-tag-row">
+            <span class="zoom-epoch-tag tag-mode-badge">🛰️ TRẠM SO SÁNH ẢNH ĐA THỜI ĐIỂM SPHEREx</span>
+            <span id="fitsZoomBandBadge" class="zoom-meta-tag">CẢM BIẾN D6 (4.41–5.01 µm)</span>
+            <span id="fitsZoomBaseline" class="zoom-meta-tag tag-clean">⏱️ Cách nhau: -- ngày</span>
+          </div>
+          <h2 id="fitsZoomTitle">KÍNH SO SÁNH ĐỐI CHỨNG (HIỂN THỊ SIÊU TO RÕ)</h2>
+        </div>
+        <button id="btnCloseFitsZoom" class="btn-close-modal" title="Đóng cửa sổ (ESC hoặc click ra ngoài)">✕</button>
+      </div>
+
+      <!-- 1. DÒNG HƯỚNG DẪN DỄ HIỂU DÀNH CHO NGƯỜI MỚI -->
+      <div class="newbie-tip-banner">
+        <span class="tip-icon">💡</span>
+        <span class="tip-text">
+          <b>Mẹo phát hiện:</b> Các ngôi sao ở xa sẽ <b>đứng bất động</b>. Đốm sáng nào <b>nhảy vị trí</b> giữa 2 lần chụp chính là <b>Hành tinh hoặc Tiểu hành tinh</b> đang di chuyển!
+        </span>
+      </div>
+
+      <!-- 2. THANH ĐIỀU HƯỚNG CHẾ ĐỘ & BỘ PHÓNG ĐẠI (CONTROLS BAR) -->
+      <div class="zoom-mode-switcher-bar">
+        <!-- Nút chọn chế độ xem to rõ -->
+        <div class="mode-buttons-big">
+          <button type="button" id="btnModeSplit" class="btn-mode-card active">
+            <span class="btn-mode-icon">◫</span>
+            <div class="btn-mode-texts">
+              <span class="btn-mode-title">1. ĐẶT CẠNH NHAU (440px)</span>
+              <span class="btn-mode-desc">Soi chi tiết cả 2 ảnh cùng lúc</span>
+            </div>
+          </button>
+
+          <button type="button" id="btnModeBlink" class="btn-mode-card">
+            <span class="btn-mode-icon">🎬</span>
+            <div class="btn-mode-texts">
+              <span class="btn-mode-title">2. XEM NHẤP NHÁY (540px)</span>
+              <span class="btn-mode-desc">Chớp tắt bắt chuyển động như Clyde Tombaugh</span>
+            </div>
+          </button>
+        </div>
+
+        <!-- Bộ phóng đại quang học (Magnification Pills) -->
+        <div class="zoom-mag-group">
+          <span class="mag-label">🔍 Độ phóng đại:</span>
+          <button type="button" class="btn-mag-pill active" data-mag="1">1x Chuẩn</button>
+          <button type="button" class="btn-mag-pill" data-mag="1.5">1.5x To</button>
+          <button type="button" class="btn-mag-pill" data-mag="2">2x Siêu To</button>
+        </div>
+
+        <!-- Bộ điều tốc chớp nháy (Chỉ hiện ở Blink Mode) -->
+        <div id="blinkControlsWrap" class="blink-speed-panel hidden">
+          <button type="button" id="btnBlinkPlayPause" class="btn-play-pause">⏸️ Tạm Dừng</button>
+          <div class="speed-slider-group">
+            <span class="speed-icon">🐢 Chậm</span>
+            <input type="range" id="blinkSpeedSlider" min="0.5" max="4.0" step="0.5" value="2.0" class="speed-range-input" title="Tốc độ nhấp nháy" />
+            <span class="speed-icon">🐇 Nhanh</span>
+          </div>
+          <div id="blinkStatusLed" class="blink-status-led led-t1">
+            <span class="led-dot">●</span> ĐANG HIỆN: ẢNH CŨ
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. KHU VỰC HIỂN THỊ CANVAS SIÊU TO RÕ -->
+      <div class="fits-zoom-body" id="fitsZoomBody">
+        
+        <!-- VIEW A: ĐẶT CẠNH NHAU (SIDE-BY-SIDE: 2 CANVAS 440x440) -->
+        <div id="viewSplitWrapper" class="split-stage-wrap">
+          <!-- Cột Ảnh Cũ (T1) -->
+          <div class="canvas-box-card card-old">
+            <div class="canvas-header-pill pill-old">
+              <span class="pill-title">🔵 1. ẢNH QUÁ KHỨ (LẦN CHỤP TRƯỚC)</span>
+              <span id="labelDateT1" class="pill-date">--</span>
+            </div>
+            <div class="canvas-interactive-wrapper" id="wrapSplitT1">
+              <canvas id="canvasSplitT1" width="440" height="440"></canvas>
+              <div id="crosshairT1" class="friendly-crosshair"></div>
+            </div>
+          </div>
+
+          <!-- Cầu nối so sánh thời gian ở giữa -->
+          <div class="time-bridge-badge">
+            <span class="bridge-icon">⚡</span>
+            <span id="labelDeltaDays" class="bridge-days">Cách nhau: -- ngày</span>
+          </div>
+
+          <!-- Cột Ảnh Mới (T2) -->
+          <div class="canvas-box-card card-new">
+            <div class="canvas-header-pill pill-new">
+              <span class="pill-title">🟠 2. ẢNH HIỆN TẠI (LẦN CHỤP SAU)</span>
+              <span id="labelDateT2" class="pill-date">--</span>
+            </div>
+            <div class="canvas-interactive-wrapper" id="wrapSplitT2">
+              <canvas id="canvasSplitT2" width="440" height="440"></canvas>
+              <div id="crosshairT2" class="friendly-crosshair"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- VIEW B: CHỚP NHÁY TRUNG TÂM (BLINK VIEW: 1 CANVAS KHỔNG LỒ 540x540) -->
+        <div id="viewBlinkWrapper" class="blink-stage-wrap hidden">
+          <div class="canvas-interactive-wrapper blink-main-wrapper" id="wrapBlinkMain">
+            <canvas id="canvasBlinkMain" width="540" height="540"></canvas>
+            <div id="crosshairBlink" class="friendly-crosshair"></div>
+            <div id="blinkScreenBanner" class="blink-screen-tag tag-old">🔵 ẢNH QUÁ KHỨ</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 4. THANH ĐO QUANG THÔNG TỰ ĐỘNG ĐỌC KẾT QUẢ TIẾNG VIỆT -->
+      <div class="newbie-flux-summary">
+        <div class="summary-col">
+          <span class="sum-label">🎯 Vị trí đang chỉ:</span>
+          <span id="hudFriendlyPixel" class="sum-val">Rê chuột lên ảnh để soi điểm</span>
+        </div>
+        <div class="summary-divider">|</div>
+        <div class="summary-col">
+          <span class="sum-label">🔵 Độ sáng ảnh cũ:</span>
+          <span id="hudFriendlyFluxT1" class="sum-val val-blue">--</span>
+        </div>
+        <div class="summary-divider">➔</div>
+        <div class="summary-col">
+          <span class="sum-label">🟠 Độ sáng ảnh mới:</span>
+          <span id="hudFriendlyFluxT2" class="sum-val val-orange">--</span>
+        </div>
+        <div class="summary-divider">|</div>
+        <div class="summary-col">
+          <span class="sum-label">✨ Biến đổi độ sáng:</span>
+          <span id="hudFriendlyDelta" class="sum-val val-status">Đứng im bình thường</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- Scripts -->
-  <script src="js/curated-data.js?v=2.3"></script>
-  <script src="js/spherex-100-samples.js?v=2.3"></script>
-  <script src="js/validator.js?v=2.3"></script>
-  <script src="js/fits-parser.js?v=2.3"></script>
-  <script src="js/sky-engine.js?v=2.3"></script>
-  <script src="js/app.js?v=2.3"></script>
+  <script src="js/curated-data.js?v=2.4"></script>
+  <script src="js/spherex-100-samples.js?v=2.4"></script>
+  <script src="js/validator.js?v=2.4"></script>
+  <script src="js/fits-parser.js?v=2.4"></script>
+  <script src="js/sky-engine.js?v=2.4"></script>
+  <script src="js/app.js?v=2.4"></script>
 </body>
 </html>

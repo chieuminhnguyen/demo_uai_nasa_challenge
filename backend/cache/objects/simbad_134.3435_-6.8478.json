@@ -1,0 +1,47 @@
+{
+  "id": "simbad_1139414",
+  "name": "TYC 4877-978-1",
+  "aliases": [
+    "tic 13835277",
+    "gaia dr3 5756987327634883456",
+    "gsc 04877-00978",
+    "tyc 4877-978-1",
+    "2mass j08572244-0650520",
+    "gaia dr2 5756987323338199936"
+  ],
+  "category": "wonder",
+  "categoryLabel": "🌟 SIMBAD (* • Near-IR Stellar Source)",
+  "rank": "SIMBAD Verified",
+  "ra": 134.3435,
+  "dec": -6.847802,
+  "epoch": 2000.0,
+  "pm_ra_arcsec_yr": -0.0161,
+  "pm_dec_arcsec_yr": 0.0012,
+  "defaultFov": 0.1,
+  "recommended_detectors": [
+    6,
+    5,
+    4,
+    3,
+    2,
+    1
+  ],
+  "distanceAU": "SIMBAD OID #1139414 (Δ=104.4\")",
+  "description": "Ngôi sao / Thiên thể xác thực từ danh mục SIMBAD Quốc tế (TYC 4877-978-1, Phân loại quang phổ: Near-IR Stellar Source, Loại: *).",
+  "colorTint": "#38bdf8",
+  "spectralType": "Near-IR Stellar Source (*)",
+  "telemetry": {
+    "obsTime": "2025-08-15T20:45:11Z",
+    "epoch": "DR1 (SPHEREx All-Sky Survey)",
+    "detectorArray": "Detector D6 (4.41–5.01 µm)",
+    "imageFlux": 36.38,
+    "zodiFlux": 6.55,
+    "variance": 0.02,
+    "psfFwhm": 6.18,
+    "snr": 64.0,
+    "qualityFlag": "CLEAN",
+    "qualityCode": "0x0000",
+    "qualityMessage": "🟢 SẠCH NHIỄU (Đã xác thực từ SIMBAD & NASA IRSA)"
+  },
+  "spectrumProfile": "stellar_hot"
+}

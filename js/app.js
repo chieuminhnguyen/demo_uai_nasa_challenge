@@ -16,11 +16,17 @@
   let aladinInstance = null;
   let isAladinMode = false;
 
-  // Trạng thái dữ liệu FITS thật từ NASA/IPAC IRSA
+  // Trạng thái dữ liệu FITS thật từ NASA/IPAC IRSA (Hỗ trợ Dual-Epoch T1 vs T2 & Band Selector D1..D6)
   let irsaState = {
-    siaRows: [],
-    selectedRow: null,
-    parsedFits: null,
+    siaRows: [],              // Toàn bộ các dòng quan sát từ NASA IRSA SIAv2
+    selectedDetector: 6,      // Detector đang chọn (1..6), mặc định 6
+    filteredRows: [],         // Danh sách frame đã lọc theo detector và sort tăng dần theo MJD
+    epoch1Row: null,          // Frame được chọn ở T1
+    epoch2Row: null,          // Frame được chọn ở T2
+    parsedFits1: null,        // FITS data đã parse của T1
+    parsedFits2: null,        // FITS data đã parse của T2
+    selectedRow: null,        // Tham chiếu frame chính (T2) cho HUD & tải FITS
+    parsedFits: null,         // Tham chiếu FITS chính (T2) cho HUD & Shader
     queryRa: 56.8392,
     queryDec: 11.9644,
     cutoutSize: 0.1,
@@ -105,7 +111,8 @@
     dom.hudObjectName = document.getElementById("hudObjectName");
     dom.hudObjectDesc = document.getElementById("hudObjectDesc");
     dom.hudObsTime = document.getElementById("hudObsTime");
-    dom.hudEpoch = document.getElementById("hudEpoch");
+    dom.hudEpoch = document.getElementById("hudEpochBadge") || document.getElementById("hudEpoch");
+    dom.hudEpochBadge = document.getElementById("hudEpochBadge");
     dom.hudDetector = document.getElementById("hudDetector");
     dom.hudQualityPill = document.getElementById("hudQualityPill");
     dom.hudQualityCode = document.getElementById("hudQualityCode");
@@ -122,6 +129,57 @@
     dom.irsaLiveBadge = document.getElementById("irsaLiveBadge");
     dom.irsaFrameCountBadge = document.getElementById("irsaFrameCountBadge");
     dom.irsaFrameSelect = document.getElementById("irsaFrameSelect");
+
+    // Dual-Epoch & Band Selector Controls
+    dom.detectorPillsBar = document.getElementById("detectorPillsBar");
+    dom.detPillBtns = document.querySelectorAll(".det-pill-btn");
+    dom.epochSelectT1 = document.getElementById("epochSelectT1");
+    dom.epochSelectT2 = document.getElementById("epochSelectT2");
+    dom.baselineStatsBadge = document.getElementById("baselineStatsBadge");
+    dom.btnAutoMaxBaseline = document.getElementById("btnAutoMaxBaseline");
+    dom.cutoutCanvasT1 = document.getElementById("cutoutCanvasT1");
+    dom.cutoutCanvasT2 = document.getElementById("cutoutCanvasT2");
+    dom.epochDateLabelT1 = document.getElementById("epochDateLabelT1");
+    dom.epochDateLabelT2 = document.getElementById("epochDateLabelT2");
+
+    // Dual Cutout Cards & Wide Compare Dual View Modal (Step 3/5)
+    dom.cardT1 = document.querySelector(".cutout-preview-card.card-t1");
+    dom.cardT2 = document.querySelector(".cutout-preview-card.card-t2");
+    dom.fitsZoomModal = document.getElementById("fitsZoomModal");
+    dom.fitsZoomBackdrop = document.getElementById("fitsZoomBackdrop");
+    dom.btnCloseFitsZoom = document.getElementById("btnCloseFitsZoom");
+    dom.fitsZoomBandBadge = document.getElementById("fitsZoomBandBadge");
+    dom.fitsZoomBaseline = document.getElementById("fitsZoomBaseline");
+    dom.fitsZoomTitle = document.getElementById("fitsZoomTitle");
+    dom.btnModeSplit = document.getElementById("btnModeSplit");
+    dom.btnModeBlink = document.getElementById("btnModeBlink");
+    dom.btnMagPills = document.querySelectorAll(".btn-mag-pill");
+    dom.blinkControlsWrap = document.getElementById("blinkControlsWrap");
+    dom.btnBlinkPlayPause = document.getElementById("btnBlinkPlayPause");
+    dom.blinkSpeedSlider = document.getElementById("blinkSpeedSlider");
+    dom.blinkStatusLed = document.getElementById("blinkStatusLed");
+    dom.fitsZoomBody = document.getElementById("fitsZoomBody");
+    dom.viewSplitWrapper = document.getElementById("viewSplitWrapper");
+    dom.viewBlinkWrapper = document.getElementById("viewBlinkWrapper");
+    dom.wrapSplitT1 = document.getElementById("wrapSplitT1");
+    dom.wrapSplitT2 = document.getElementById("wrapSplitT2");
+    dom.wrapBlinkMain = document.getElementById("wrapBlinkMain");
+    dom.canvasSplitT1 = document.getElementById("canvasSplitT1");
+    dom.canvasSplitT2 = document.getElementById("canvasSplitT2");
+    dom.canvasBlinkMain = document.getElementById("canvasBlinkMain");
+    dom.crosshairT1 = document.getElementById("crosshairT1");
+    dom.crosshairT2 = document.getElementById("crosshairT2");
+    dom.crosshairBlink = document.getElementById("crosshairBlink");
+    dom.labelDateT1 = document.getElementById("labelDateT1");
+    dom.labelDateT2 = document.getElementById("labelDateT2");
+    dom.labelDeltaDays = document.getElementById("labelDeltaDays");
+    dom.blinkScreenBanner = document.getElementById("blinkScreenBanner");
+    dom.hudFriendlyPixel = document.getElementById("hudFriendlyPixel");
+    dom.hudFriendlyFluxT1 = document.getElementById("hudFriendlyFluxT1");
+    dom.hudFriendlyFluxT2 = document.getElementById("hudFriendlyFluxT2");
+    dom.hudFriendlyDelta = document.getElementById("hudFriendlyDelta");
+
+
 
     // URL State Output (Output 3)
     dom.shareUrlInput = document.getElementById("shareUrlInput");
@@ -149,12 +207,16 @@
       },
       onReticleScreenPos: updateFloatingCardPosition,
       onFlightStart: () => {
-        dom.flightStatusBadge.textContent = "🚀 CAMERA FLY-TO (SLERP INTERPOLATION)...";
-        dom.flightStatusBadge.className = "status-pill status-flying";
+        if (dom.flightStatusBadge) {
+          dom.flightStatusBadge.textContent = "🚀 CAMERA FLY-TO (SLERP INTERPOLATION)...";
+          dom.flightStatusBadge.className = "status-pill status-flying";
+        }
       },
       onFlightEnd: () => {
-        dom.flightStatusBadge.textContent = "🎯 ĐÃ KHÓA MỤC TIÊU (TARGET LOCKED)";
-        dom.flightStatusBadge.className = "status-pill status-locked";
+        if (dom.flightStatusBadge) {
+          dom.flightStatusBadge.textContent = "🎯 ĐÃ KHÓA MỤC TIÊU (TARGET LOCKED)";
+          dom.flightStatusBadge.className = "status-pill status-locked";
+        }
       },
       onCanvasPick: async (ra, dec) => {
         dom.raInput.value = formatCoordPrecision(ra);
@@ -379,7 +441,12 @@
     irsaState.queryRa = queryRa;
     irsaState.queryDec = queryDec;
     irsaState.cutoutSize = cutoutSize;
+    irsaState.parsedFits1 = null;
+    irsaState.parsedFits2 = null;
     irsaState.parsedFits = null;
+    irsaState.epoch1Row = null;
+    irsaState.epoch2Row = null;
+    irsaState.selectedRow = null;
     skyEngine.setRealFitsCutout(null, null, ra, dec);
 
     if (dom.irsaLiveBadge) {
@@ -389,8 +456,11 @@
     if (dom.irsaFrameCountBadge) {
       dom.irsaFrameCountBadge.textContent = "";
     }
-    if (dom.irsaFrameSelect) {
-      dom.irsaFrameSelect.innerHTML = `<option value="">⏳ Đang tải danh mục quan sát thực từ irsa.ipac.caltech.edu...</option>`;
+    if (dom.epochSelectT1) {
+      dom.epochSelectT1.innerHTML = `<option value="">⏳ Đang tải SIAv2...</option>`;
+    }
+    if (dom.epochSelectT2) {
+      dom.epochSelectT2.innerHTML = `<option value="">⏳ Đang tải SIAv2...</option>`;
     }
 
     try {
@@ -412,8 +482,14 @@
           dom.irsaLiveBadge.textContent = "⚠️ IRSA SIAv2: 0 frame tại tọa độ này (Đang hiển thị mô phỏng)";
           dom.irsaLiveBadge.className = "sync-badge syncing";
         }
-        if (dom.irsaFrameSelect) {
-          dom.irsaFrameSelect.innerHTML = `<option value="">Không tìm thấy frame SPHEREx DR1/QR3 tại tọa độ này</option>`;
+        if (dom.epochSelectT1) {
+          dom.epochSelectT1.innerHTML = `<option value="">(0 frame)</option>`;
+        }
+        if (dom.epochSelectT2) {
+          dom.epochSelectT2.innerHTML = `<option value="">(0 frame)</option>`;
+        }
+        if (dom.baselineStatsBadge) {
+          dom.baselineStatsBadge.textContent = "⚠️ Không tìm thấy frame SPHEREx DR1/QR3 tại tọa độ này";
         }
         return;
       }
@@ -431,33 +507,20 @@
         dom.irsaFrameCountBadge.textContent = `${rows.length} Frames (${detSummary})`;
       }
 
-      // Chọn frame ưu tiên theo recommended_detectors (VD: D5, D6 cho sao lùn nâu / sao chuyển động riêng lớn)
+      // Ưu tiên chọn detector khuyên dùng của mục tiêu có sẵn dữ liệu (hoặc mặc định D6)
       const prefDets = matchedObj?.recommended_detectors || [6, 5, 4, 3, 2, 1];
-      let bestIdx = 0;
+      let defaultDet = (matchedObj?.recommended_detectors && matchedObj.recommended_detectors[0]) || 6;
       for (const d of prefDets) {
-        const foundIdx = rows.findIndex((r) => r.detector === d);
-        if (foundIdx !== -1) {
-          bestIdx = foundIdx;
+        if (rows.some((r) => r.detector === d)) {
+          defaultDet = d;
           break;
         }
       }
-
-      // Đổ danh sách tối đa 60 frames gần tâm nhất vào dropdown để người dùng chuyển đổi
-      const displayRows = rows.slice(0, 60);
-      if (bestIdx >= 60) bestIdx = 0;
-
-      if (dom.irsaFrameSelect) {
-        dom.irsaFrameSelect.innerHTML = displayRows
-          .map(
-            (r, i) =>
-              `<option value="${i}" ${i === bestIdx ? "selected" : ""}>[D${r.detector} • ${r.wlMinUm}–${r.wlMaxUm}µm] ${
-                r.obs_date_iso
-              } (${r.collection.toUpperCase()} • Δ=${(r.distToTarget * 3600).toFixed(0)}")</option>`
-          )
-          .join("");
+      if (!rows.some((r) => r.detector === defaultDet)) {
+        defaultDet = rows[0].detector || 6;
       }
 
-      await loadAndRenderRealFitsFrame(displayRows[bestIdx], ra, dec, cutoutSize, reqId);
+      populateEpochControlsForDetector(defaultDet);
     } catch (err) {
       if (reqId !== irsaState.requestId) return;
       if (dom.irsaLiveBadge) {
@@ -468,65 +531,213 @@
   }
 
   /**
-   * Tải gói cắt nhị phân Multi-Extension FITS (.fits) thật từ NASA IRSA IBE và giải mã 6 lớp HDU
+   * Lọc danh sách frame theo Detector đã chọn và render danh sách vào Dropdown T1 & T2
    */
-  async function loadAndRenderRealFitsFrame(row, targetRa, targetDec, cutoutSize, reqId) {
-    if (!row || !window.SpherexFitsParser) return;
-    irsaState.selectedRow = row;
+  function populateEpochControlsForDetector(detectorNum) {
+    irsaState.selectedDetector = detectorNum;
+
+    // Cập nhật trạng thái active cho nút bấm D1..D6
+    if (dom.detPillBtns) {
+      dom.detPillBtns.forEach((btn) => {
+        btn.classList.toggle("active", parseInt(btn.dataset.det, 10) === detectorNum);
+      });
+    }
+
+    // Lọc frame thuộc detector này và sắp xếp theo ngày chụp (t_min_mjd tăng dần)
+    irsaState.filteredRows = (irsaState.siaRows || [])
+      .filter((r) => r.detector === detectorNum)
+      .sort((a, b) => (a.t_min_mjd || 0) - (b.t_min_mjd || 0));
+
+    if (!irsaState.filteredRows.length) {
+      if (dom.epochSelectT1) dom.epochSelectT1.innerHTML = `<option value="">(0 frame D${detectorNum})</option>`;
+      if (dom.epochSelectT2) dom.epochSelectT2.innerHTML = `<option value="">(0 frame D${detectorNum})</option>`;
+      if (dom.baselineStatsBadge) {
+        dom.baselineStatsBadge.textContent = `⚠️ D${detectorNum}: Không có frame tại tọa độ này`;
+        dom.baselineStatsBadge.style.color = "#f59e0b";
+      }
+      if (dom.epochDateLabelT1) dom.epochDateLabelT1.textContent = "--";
+      if (dom.epochDateLabelT2) dom.epochDateLabelT2.textContent = "--";
+      if (currentObject) {
+        drawCutoutPreview(currentObject, skyEngine ? skyEngine.fov : 0.25);
+      }
+      return;
+    }
+
+    // Tự động chọn cặp: T1 là frame cũ nhất (index 0), T2 là frame mới nhất (index cuối)
+    const idx1 = 0;
+    const idx2 = irsaState.filteredRows.length > 1 ? irsaState.filteredRows.length - 1 : 0;
+
+    renderEpochOptions(dom.epochSelectT1, irsaState.filteredRows, idx1);
+    renderEpochOptions(dom.epochSelectT2, irsaState.filteredRows, idx2);
+
+    updateBaselineStats();
+    triggerDualEpochCutoutFetch();
+  }
+
+  /**
+   * Đổ dữ liệu frame vào thẻ <select>
+   */
+  function renderEpochOptions(selectEl, rows, selectedIndex) {
+    if (!selectEl) return;
+    selectEl.innerHTML = rows
+      .map((r, i) => {
+        const dateStr = r.obs_date_iso ? r.obs_date_iso.split("T")[0] : `MJD ${(r.t_min_mjd || 0).toFixed(1)}`;
+        const collection = (r.collection || "DR1").toUpperCase();
+        return `<option value="${i}" ${i === selectedIndex ? "selected" : ""}>
+      [${dateStr}] ${collection} (Δ=${(r.distToTarget * 3600).toFixed(0)}")
+    </option>`;
+      })
+      .join("");
+  }
+
+  /**
+   * Tính toán và hiển thị khoảng cách thời gian giữa T1 và T2 (Baseline Delta_t)
+   */
+  function updateBaselineStats() {
+    const i1 = parseInt(dom.epochSelectT1?.value, 10);
+    const i2 = parseInt(dom.epochSelectT2?.value, 10);
+    const r1 = irsaState.filteredRows[i1];
+    const r2 = irsaState.filteredRows[i2];
+
+    if (!r1 || !r2) {
+      if (dom.baselineStatsBadge) dom.baselineStatsBadge.textContent = "⏱️ Baseline: Δt = 0.0 ngày";
+      return;
+    }
+
+    irsaState.epoch1Row = r1;
+    irsaState.epoch2Row = r2;
+    irsaState.selectedRow = r2;
+
+    const mjd1 = r1.t_min_mjd || 0;
+    const mjd2 = r2.t_min_mjd || 0;
+    const deltaDays = Math.abs(mjd2 - mjd1);
+    const years = (deltaDays / 365.25).toFixed(1);
+
+    if (dom.baselineStatsBadge) {
+      if (deltaDays < 0.001) {
+        dom.baselineStatsBadge.textContent = `⏱️ Baseline: Cùng ngày chụp (Δt = 0 ngày)`;
+        dom.baselineStatsBadge.style.color = "#f59e0b";
+      } else {
+        dom.baselineStatsBadge.textContent = `⏱️ Baseline: Δt = ${deltaDays.toFixed(1)} ngày (~${years} năm) • D${irsaState.selectedDetector}`;
+        dom.baselineStatsBadge.style.color = "#4ade80";
+      }
+    }
+
+    // Cập nhật nhãn ngày tháng dưới mỗi ảnh
+    if (dom.epochDateLabelT1) {
+      dom.epochDateLabelT1.textContent = r1.obs_date_iso?.split("T")[0] || `MJD ${mjd1.toFixed(0)}`;
+    }
+    if (dom.epochDateLabelT2) {
+      dom.epochDateLabelT2.textContent = r2.obs_date_iso?.split("T")[0] || `MJD ${mjd2.toFixed(0)}`;
+    }
+  }
+
+  /**
+   * Nút 1-Click: Tự động chọn 2 frame có độ chênh ngày lớn nhất
+   */
+  function handleAutoMaxBaseline() {
+    if (irsaState.filteredRows.length < 2) return;
+    if (dom.epochSelectT1) dom.epochSelectT1.value = 0;
+    if (dom.epochSelectT2) dom.epochSelectT2.value = irsaState.filteredRows.length - 1;
+    updateBaselineStats();
+    triggerDualEpochCutoutFetch();
+  }
+
+  /**
+   * Tải đồng thời 2 file FITS Cutout từ NASA IRSA và render lên 2 Canvas T1 và T2
+   */
+  async function triggerDualEpochCutoutFetch() {
+    const r1 = irsaState.epoch1Row;
+    const r2 = irsaState.epoch2Row;
+    if (!r1 || !r2 || !window.SpherexFitsParser) return;
+
+    const reqId = ++irsaState.requestId;
 
     if (dom.irsaLiveBadge) {
-      dom.irsaLiveBadge.textContent = `⏳ Đang tải & giải mã Binary FITS (D${row.detector} • ${row.obs_date_iso})...`;
+      dom.irsaLiveBadge.textContent = `⏳ Đang tải song song 2 FITS (T1 & T2 • D${irsaState.selectedDetector})...`;
       dom.irsaLiveBadge.className = "sync-badge syncing";
     }
 
     try {
-      const cutoutUrl = `/api/irsa/cutout?access_url=${encodeURIComponent(row.access_url)}&ra=${irsaState.queryRa}&dec=${
-        irsaState.queryDec
-      }&size=${cutoutSize}&mode=compact`;
+      const cutoutUrl1 = `/api/irsa/cutout?access_url=${encodeURIComponent(r1.access_url)}&ra=${irsaState.queryRa}&dec=${irsaState.queryDec}&size=${irsaState.cutoutSize}&mode=compact`;
+      const cutoutUrl2 = `/api/irsa/cutout?access_url=${encodeURIComponent(r2.access_url)}&ra=${irsaState.queryRa}&dec=${irsaState.queryDec}&size=${irsaState.cutoutSize}&mode=compact`;
 
-      const resp = await fetch(cutoutUrl);
-      if (reqId && reqId !== irsaState.requestId) return;
-      if (!resp.ok) throw new Error(`Cutout HTTP ${resp.status}`);
+      // Gọi song song 2 request mạng cùng lúc
+      const [resp1, resp2] = await Promise.all([fetch(cutoutUrl1), fetch(cutoutUrl2)]);
 
-      const arrayBuffer = await resp.arrayBuffer();
-      if (reqId && reqId !== irsaState.requestId) return;
+      if (reqId !== irsaState.requestId) return;
+      if (!resp1.ok || !resp2.ok) throw new Error("Cutout HTTP error");
 
-      const parsed = window.SpherexFitsParser.parseMultiExtensionFits(arrayBuffer);
-      if (!parsed || !parsed.valid) {
-        throw new Error("Invalid FITS structure");
-      }
+      const [buf1, buf2] = await Promise.all([resp1.arrayBuffer(), resp2.arrayBuffer()]);
+      if (reqId !== irsaState.requestId) return;
 
-      irsaState.parsedFits = parsed;
+      irsaState.parsedFits1 = window.SpherexFitsParser.parseMultiExtensionFits(buf1);
+      irsaState.parsedFits2 = window.SpherexFitsParser.parseMultiExtensionFits(buf2);
+      irsaState.parsedFits = irsaState.parsedFits2;
+      irsaState.selectedRow = r2;
 
-      // Render ma trận điểm ảnh 32-bit float thật lên ô Cutout Preview và lên bản đồ chính
       refreshRealFitsVisuals();
 
       if (dom.irsaLiveBadge) {
-        dom.irsaLiveBadge.textContent = `🟢 LIVE NASA IRSA FITS (${parsed.width}×${parsed.height}px • D${parsed.detector})`;
+        dom.irsaLiveBadge.textContent = `🟢 LIVE FITS T1 & T2 (D${irsaState.selectedDetector} • Δt=${Math.abs(
+          (r2.t_min_mjd || 0) - (r1.t_min_mjd || 0)
+        ).toFixed(0)}d)`;
         dom.irsaLiveBadge.className = "sync-badge synced";
       }
-    } catch (e) {
+
+      // Phát sự kiện chuẩn hóa (Clean Output Event) cho các module so sánh tiếp theo (Blink / Difference)
+      window.dispatchEvent(
+        new CustomEvent("spherex:dualEpochReady", {
+          detail: {
+            detector: irsaState.selectedDetector,
+            epoch1Row: r1,
+            epoch2Row: r2,
+            parsedFits1: irsaState.parsedFits1,
+            parsedFits2: irsaState.parsedFits2,
+            deltaDays: Math.abs((r2.t_min_mjd || 0) - (r1.t_min_mjd || 0))
+          }
+        })
+      );
+    } catch (err) {
+      if (reqId !== irsaState.requestId) return;
       if (dom.irsaLiveBadge) {
-        dom.irsaLiveBadge.textContent = `⚠️ Không tải được FITS Cutout (${e.message})`;
+        dom.irsaLiveBadge.textContent = `⚠️ Lỗi tải FITS (${err.message})`;
         dom.irsaLiveBadge.className = "sync-badge syncing";
       }
     }
   }
 
   /**
-   * Vẽ lại ảnh FITS thật và cập nhật số liệu HUD khi đổi Frame hoặc kéo thanh Brightness/Contrast/ZODI
+   * Vẽ lại ảnh FITS thật (cả T1 và T2) và cập nhật số liệu HUD khi đổi Frame hoặc kéo thanh Brightness/Contrast/ZODI
    */
   function refreshRealFitsVisuals() {
-    const parsed = irsaState.parsedFits;
-    if (!parsed || !parsed.valid || !window.SpherexFitsParser) return;
+    if (!window.SpherexFitsParser) return;
 
-    const offCanvas = window.SpherexFitsParser.renderFitsToCanvas(parsed, dom.cutoutPreviewCanvas, {
+    const shaderOpts = {
       subtractZodi: skyEngine.shader.subtractZodi,
       brightness: skyEngine.shader.brightness,
       contrast: skyEngine.shader.contrast,
       colormap: "infrared"
-    });
+    };
 
+    // Vẽ lên Canvas T1
+    if (dom.cutoutCanvasT1 && irsaState.parsedFits1 && irsaState.parsedFits1.valid) {
+      window.SpherexFitsParser.renderFitsToCanvas(irsaState.parsedFits1, dom.cutoutCanvasT1, shaderOpts);
+    }
+
+    // Vẽ lên Canvas T2
+    if (dom.cutoutCanvasT2 && irsaState.parsedFits2 && irsaState.parsedFits2.valid) {
+      window.SpherexFitsParser.renderFitsToCanvas(irsaState.parsedFits2, dom.cutoutCanvasT2, shaderOpts);
+    }
+
+    const parsed = irsaState.parsedFits2 || irsaState.parsedFits;
+    if (!parsed || !parsed.valid) return;
+
+    if (dom.cutoutPreviewCanvas) {
+      window.SpherexFitsParser.renderFitsToCanvas(parsed, dom.cutoutPreviewCanvas, shaderOpts);
+    }
+
+    const offCanvas = window.SpherexFitsParser.renderFitsToCanvas(parsed, null, shaderOpts);
     skyEngine.setRealFitsCutout(
       parsed,
       offCanvas,
@@ -537,7 +748,9 @@
 
     // Cập nhật các ô thông số HDU trên Inspector HUD
     dom.hudObsTime.textContent = parsed.dateObs;
-    dom.hudEpoch.textContent = `${(irsaState.selectedRow?.collection || "spherex_dr1").toUpperCase()} • REAL FITS`;
+    if (dom.hudEpoch) {
+      dom.hudEpoch.textContent = `${(irsaState.selectedRow?.collection || "spherex_dr1").toUpperCase()} • D${parsed.detector}`;
+    }
     dom.hudDetector.textContent = `Detector D${parsed.detector} (${parsed.wlMin}–${parsed.wlMax} µm)`;
 
     dom.hudQualityPill.textContent = parsed.qualityMessage;
@@ -558,6 +771,351 @@
     }`;
     dom.hudVariance.textContent = `±${parsed.medianVariance} MJy/sr²`;
     dom.hudSnr.textContent = `${parsed.snr} (N_stars=${parsed.astrometryStars})`;
+
+    // Nếu Modal phóng to & so sánh đối chứng đang mở, cập nhật ngay các Canvas lớn
+    if (dom.fitsZoomModal && !dom.fitsZoomModal.classList.contains("hidden")) {
+      renderDualViewModal();
+    }
+  }
+
+  // ==========================================================================
+  // MODULE: HIGH-VISIBILITY & NEWBIE DUAL VIEW MODES (BƯỚC 3 / 5)
+  // ==========================================================================
+  function getDetectorBandDesc(d) {
+    const descs = {
+      1: "0.75–1.11 µm",
+      2: "1.11–1.63 µm",
+      3: "1.63–2.42 µm",
+      4: "2.42–3.82 µm",
+      5: "3.82–4.42 µm",
+      6: "4.41–5.01 µm"
+    };
+    return descs[d] || "0.75–5.01 µm";
+  }
+
+  const dualViewState = {
+    mode: "split", // "split" | "blink"
+    isBlinking: false,
+    blinkInterval: null,
+    blinkCurrent: "T1",
+    blinkSpeed: 2.0, // times per second
+    magnification: 1.0
+  };
+
+  // Render FITS lên Canvas to rõ không bị mờ (Image Smoothing = False)
+  function renderCrispLargeFits(parsedFits, canvasEl) {
+    if (!canvasEl) return;
+    const ctx = canvasEl.getContext("2d");
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.mozImageSmoothingEnabled = false;
+    ctx.webkitImageSmoothingEnabled = false;
+    ctx.msImageSmoothingEnabled = false;
+
+    const shaderOpts = {
+      subtractZodi: dom.toggleZodi ? dom.toggleZodi.checked : true,
+      brightness: dom.brightnessSlider ? parseFloat(dom.brightnessSlider.value) : 0,
+      contrast: dom.contrastSlider ? parseFloat(dom.contrastSlider.value) : 1.15,
+      colormap: "infrared"
+    };
+
+    if (parsedFits && parsedFits.valid && window.SpherexFitsParser) {
+      window.SpherexFitsParser.renderFitsToCanvas(parsedFits, canvasEl, shaderOpts);
+    } else {
+      ctx.fillStyle = "#010409";
+      ctx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(10, 10, canvasEl.width - 20, canvasEl.height - 20);
+      ctx.fillStyle = "#7dd3fc";
+      ctx.font = "12px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("Đang nạp ảnh FITS SPHEREx Level-2...", canvasEl.width / 2, canvasEl.height / 2);
+    }
+    ctx.restore();
+  }
+
+  function openFitsZoomModal(mode = "split") {
+    if (!dom.fitsZoomModal) return;
+    dom.fitsZoomModal.classList.remove("hidden");
+    document.body.classList.add("modal-open");
+
+    // Reset về tỷ lệ 1x Chuẩn fit viewport hoàn toàn, tránh scroll
+    dualViewState.magnification = 1.0;
+    if (dom.btnMagPills) {
+      dom.btnMagPills.forEach((p) => p.classList.toggle("active", p.dataset.mag === "1"));
+    }
+    if (dom.canvasSplitT1) { dom.canvasSplitT1.style.width = ""; dom.canvasSplitT1.style.height = ""; }
+    if (dom.canvasSplitT2) { dom.canvasSplitT2.style.width = ""; dom.canvasSplitT2.style.height = ""; }
+    if (dom.canvasBlinkMain) { dom.canvasBlinkMain.style.width = ""; dom.canvasBlinkMain.style.height = ""; }
+    if (dom.fitsZoomBody) { dom.fitsZoomBody.style.overflow = "hidden"; }
+
+    setDualViewMode(mode);
+    renderDualViewModal();
+  }
+
+  function closeFitsZoomModal() {
+    if (!dom.fitsZoomModal) return;
+    stopBlinkAnimation();
+    dom.fitsZoomModal.classList.add("hidden");
+    document.body.classList.remove("modal-open");
+  }
+
+  function setDualViewMode(mode) {
+    dualViewState.mode = mode;
+    if (mode === "split") {
+      if (dom.btnModeSplit) dom.btnModeSplit.classList.add("active");
+      if (dom.btnModeBlink) dom.btnModeBlink.classList.remove("active");
+      if (dom.viewSplitWrapper) dom.viewSplitWrapper.classList.remove("hidden");
+      if (dom.viewBlinkWrapper) dom.viewBlinkWrapper.classList.add("hidden");
+      if (dom.blinkControlsWrap) dom.blinkControlsWrap.classList.add("hidden");
+      stopBlinkAnimation();
+    } else {
+      if (dom.btnModeBlink) dom.btnModeBlink.classList.add("active");
+      if (dom.btnModeSplit) dom.btnModeSplit.classList.remove("active");
+      if (dom.viewBlinkWrapper) dom.viewBlinkWrapper.classList.remove("hidden");
+      if (dom.viewSplitWrapper) dom.viewSplitWrapper.classList.add("hidden");
+      if (dom.blinkControlsWrap) dom.blinkControlsWrap.classList.remove("hidden");
+      startBlinkAnimation();
+    }
+  }
+
+  function renderDualViewModal() {
+    const detNum = irsaState.selectedDetector || 6;
+    if (dom.fitsZoomBandBadge) {
+      dom.fitsZoomBandBadge.textContent = `CẢM BIẾN D${detNum} (${getDetectorBandDesc(detNum)})`;
+    }
+
+    const baselineText = dom.baselineStatsBadge ? dom.baselineStatsBadge.textContent.replace("⏱️ Baseline: ", "") : "--";
+    if (dom.fitsZoomBaseline) {
+      dom.fitsZoomBaseline.textContent = `⏱️ Cách nhau: ${baselineText}`;
+    }
+    if (dom.labelDeltaDays) {
+      dom.labelDeltaDays.textContent = `Cách nhau: ${baselineText}`;
+    }
+
+    const date1 = irsaState.epoch1Row?.date_obs || dom.epochDateLabelT1?.textContent || "--";
+    const date2 = irsaState.epoch2Row?.date_obs || dom.epochDateLabelT2?.textContent || "--";
+    if (dom.labelDateT1) dom.labelDateT1.textContent = date1;
+    if (dom.labelDateT2) dom.labelDateT2.textContent = date2;
+
+    // Render Side-by-Side Canvas T1 và T2
+    if (dom.canvasSplitT1) {
+      renderCrispLargeFits(irsaState.parsedFits1, dom.canvasSplitT1);
+    }
+    if (dom.canvasSplitT2) {
+      renderCrispLargeFits(irsaState.parsedFits2, dom.canvasSplitT2);
+    }
+
+    // Render Blink Main Canvas
+    if (dom.canvasBlinkMain) {
+      const activeParsed = dualViewState.blinkCurrent === "T1" ? irsaState.parsedFits1 : irsaState.parsedFits2;
+      renderCrispLargeFits(activeParsed, dom.canvasBlinkMain);
+    }
+
+    // Cập nhật trạng thái đo quang thông mặc định tâm
+    updateCenterFriendlyFlux();
+  }
+
+  function updateCenterFriendlyFlux() {
+    const p1 = irsaState.parsedFits1;
+    const p2 = irsaState.parsedFits2;
+    if (!p1 || !p1.width || !p2 || !p2.width) return;
+
+    const cx = Math.floor(p1.width / 2);
+    const cy = Math.floor(p1.height / 2);
+
+    const f1 = p1.hdus?.["IMAGE"]?.matrix?.[cy * p1.width + cx] || NaN;
+    const f2 = p2.hdus?.["IMAGE"]?.matrix?.[cy * p2.width + cx] || NaN;
+
+    if (dom.hudFriendlyPixel) {
+      dom.hudFriendlyPixel.textContent = `Tâm thiên thể [X: ${cx}, Y: ${cy}]`;
+    }
+    if (dom.hudFriendlyFluxT1) {
+      dom.hudFriendlyFluxT1.textContent = !isNaN(f1) ? `${f1.toFixed(2)} MJy/sr` : "--";
+    }
+    if (dom.hudFriendlyFluxT2) {
+      dom.hudFriendlyFluxT2.textContent = !isNaN(f2) ? `${f2.toFixed(2)} MJy/sr` : "--";
+    }
+    if (dom.hudFriendlyDelta && !isNaN(f1) && !isNaN(f2)) {
+      const delta = f2 - f1;
+      const noise = p1.meanZodi ? p1.meanZodi * 0.05 : 0.2;
+      if (Math.abs(delta) < Math.max(0.2, noise)) {
+        dom.hudFriendlyDelta.textContent = `Đứng im bình thường (Chênh lệch: ${delta >= 0 ? "+" : ""}${delta.toFixed(2)})`;
+        dom.hudFriendlyDelta.className = "sum-val val-status";
+      } else if (delta > 0) {
+        dom.hudFriendlyDelta.textContent = `Sáng hơn +${delta.toFixed(2)} MJy/sr (Phát hiện biến thiên/dịch chuyển!)`;
+        dom.hudFriendlyDelta.className = "sum-val val-orange";
+      } else {
+        dom.hudFriendlyDelta.textContent = `Tối đi ${delta.toFixed(2)} MJy/sr (Vật thể đã rời vị trí!)`;
+        dom.hudFriendlyDelta.className = "sum-val val-blue";
+      }
+    }
+  }
+
+  function startBlinkAnimation() {
+    stopBlinkAnimation();
+    dualViewState.isBlinking = true;
+    if (dom.btnBlinkPlayPause) {
+      dom.btnBlinkPlayPause.textContent = "⏸️ Tạm Dừng";
+    }
+
+    const speed = parseFloat(dom.blinkSpeedSlider?.value) || 2.0;
+    const intervalMs = Math.round(1000 / speed);
+
+    dualViewState.blinkInterval = setInterval(() => {
+      dualViewState.blinkCurrent = dualViewState.blinkCurrent === "T1" ? "T2" : "T1";
+      updateBlinkFrame();
+    }, intervalMs);
+  }
+
+  function stopBlinkAnimation() {
+    dualViewState.isBlinking = false;
+    if (dualViewState.blinkInterval) {
+      clearInterval(dualViewState.blinkInterval);
+      dualViewState.blinkInterval = null;
+    }
+    if (dom.btnBlinkPlayPause) {
+      dom.btnBlinkPlayPause.textContent = "▶️ Tiếp Tục";
+    }
+  }
+
+  function toggleBlinkPlayPause() {
+    if (dualViewState.isBlinking) {
+      stopBlinkAnimation();
+    } else {
+      startBlinkAnimation();
+    }
+  }
+
+  function updateBlinkFrame() {
+    const isT1 = dualViewState.blinkCurrent === "T1";
+    const parsed = isT1 ? irsaState.parsedFits1 : irsaState.parsedFits2;
+
+    renderCrispLargeFits(parsed, dom.canvasBlinkMain);
+
+    if (dom.blinkStatusLed) {
+      dom.blinkStatusLed.className = `blink-status-led ${isT1 ? "led-t1" : "led-t2"}`;
+      dom.blinkStatusLed.innerHTML = `<span class="led-dot">●</span> ĐANG HIỆN: ${isT1 ? "ẢNH CŨ (T1)" : "ẢNH MỚI (T2)"}`;
+    }
+    if (dom.blinkScreenBanner) {
+      dom.blinkScreenBanner.className = `blink-screen-tag ${isT1 ? "tag-old" : "tag-new"}`;
+      dom.blinkScreenBanner.textContent = isT1 ? "🔵 ẢNH QUÁ KHỨ (LẦN 1)" : "🟠 ẢNH HIỆN TẠI (LẦN 2)";
+    }
+  }
+
+  function handleCrosshairMouseMove(e, wrapEl) {
+    if (!wrapEl) return;
+    const rect = wrapEl.getBoundingClientRect();
+    const mouseX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const mouseY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+
+    const normX = mouseX / rect.width;
+    const normY = mouseY / rect.height;
+
+    [dom.crosshairT1, dom.crosshairT2, dom.crosshairBlink].forEach((ch) => {
+      if (ch) {
+        ch.style.left = `${(normX * 100).toFixed(2)}%`;
+        ch.style.top = `${(normY * 100).toFixed(2)}%`;
+        ch.style.display = "block";
+      }
+    });
+
+    const p1 = irsaState.parsedFits1;
+    const p2 = irsaState.parsedFits2;
+    const w = p1?.width || p2?.width || 58;
+    const h = p1?.height || p2?.height || 58;
+
+    const px = Math.floor(normX * w);
+    const py = Math.floor((1 - normY) * h);
+
+    if (dom.hudFriendlyPixel) {
+      dom.hudFriendlyPixel.textContent = `Pixel [X: ${px}, Y: ${py}]`;
+    }
+
+    let flux1 = NaN;
+    let flux2 = NaN;
+
+    if (p1 && p1.hdus && p1.hdus["IMAGE"] && p1.hdus["IMAGE"].matrix) {
+      if (px >= 0 && px < p1.width && py >= 0 && py < p1.height) {
+        flux1 = p1.hdus["IMAGE"].matrix[py * p1.width + px];
+      }
+    }
+    if (p2 && p2.hdus && p2.hdus["IMAGE"] && p2.hdus["IMAGE"].matrix) {
+      if (px >= 0 && px < p2.width && py >= 0 && py < p2.height) {
+        flux2 = p2.hdus["IMAGE"].matrix[py * p2.width + px];
+      }
+    }
+
+    if (dom.hudFriendlyFluxT1) {
+      dom.hudFriendlyFluxT1.textContent = !isNaN(flux1) ? `${flux1.toFixed(2)} MJy/sr` : "--";
+    }
+    if (dom.hudFriendlyFluxT2) {
+      dom.hudFriendlyFluxT2.textContent = !isNaN(flux2) ? `${flux2.toFixed(2)} MJy/sr` : "--";
+    }
+
+    if (dom.hudFriendlyDelta) {
+      if (!isNaN(flux1) && !isNaN(flux2)) {
+        const delta = flux2 - flux1;
+        const noise = p1?.meanZodi ? p1.meanZodi * 0.05 : 0.2;
+        if (Math.abs(delta) < Math.max(0.2, noise)) {
+          dom.hudFriendlyDelta.textContent = `Đứng im bình thường (Chênh lệch: ${delta >= 0 ? "+" : ""}${delta.toFixed(2)})`;
+          dom.hudFriendlyDelta.className = "sum-val val-status";
+        } else if (delta > 0) {
+          dom.hudFriendlyDelta.textContent = `Sáng hơn +${delta.toFixed(2)} MJy/sr (Phát hiện biến thiên/dịch chuyển!)`;
+          dom.hudFriendlyDelta.className = "sum-val val-orange";
+        } else {
+          dom.hudFriendlyDelta.textContent = `Tối đi ${delta.toFixed(2)} MJy/sr (Vật thể đã rời vị trí!)`;
+          dom.hudFriendlyDelta.className = "sum-val val-blue";
+        }
+      } else {
+        dom.hudFriendlyDelta.textContent = "Đang nạp dữ liệu...";
+      }
+    }
+  }
+
+  function handleCrosshairMouseLeave() {
+    [dom.crosshairT1, dom.crosshairT2, dom.crosshairBlink].forEach((ch) => {
+      if (ch) ch.style.display = "none";
+    });
+  }
+
+  function initMagnificationControls() {
+    if (!dom.btnMagPills) return;
+    dom.btnMagPills.forEach((pill) => {
+      pill.addEventListener("click", () => {
+        dom.btnMagPills.forEach((p) => p.classList.remove("active"));
+        pill.classList.add("active");
+        const scale = parseFloat(pill.dataset.mag) || 1.0;
+        dualViewState.magnification = scale;
+
+        if (scale === 1.0) {
+          // Trả về chế độ Responsive Viewport-fit (Tự động fit không scroll)
+          if (dom.canvasSplitT1) { dom.canvasSplitT1.style.width = ""; dom.canvasSplitT1.style.height = ""; }
+          if (dom.canvasSplitT2) { dom.canvasSplitT2.style.width = ""; dom.canvasSplitT2.style.height = ""; }
+          if (dom.canvasBlinkMain) { dom.canvasBlinkMain.style.width = ""; dom.canvasBlinkMain.style.height = ""; }
+          if (dom.fitsZoomBody) { dom.fitsZoomBody.style.overflow = "hidden"; }
+        } else {
+          // Khi chủ động phóng to 1.5x hoặc 2x: mở cuộn nội bộ để soi chi tiết
+          const baseSplit = Math.max(340, Math.min(440, window.innerHeight - 200));
+          const baseBlink = Math.max(400, Math.min(540, window.innerHeight - 200));
+
+          if (dom.canvasSplitT1) {
+            dom.canvasSplitT1.style.width = `${Math.round(baseSplit * scale)}px`;
+            dom.canvasSplitT1.style.height = `${Math.round(baseSplit * scale)}px`;
+          }
+          if (dom.canvasSplitT2) {
+            dom.canvasSplitT2.style.width = `${Math.round(baseSplit * scale)}px`;
+            dom.canvasSplitT2.style.height = `${Math.round(baseSplit * scale)}px`;
+          }
+          if (dom.canvasBlinkMain) {
+            dom.canvasBlinkMain.style.width = `${Math.round(baseBlink * scale)}px`;
+            dom.canvasBlinkMain.style.height = `${Math.round(baseBlink * scale)}px`;
+          }
+          if (dom.fitsZoomBody) { dom.fitsZoomBody.style.overflow = "auto"; }
+        }
+      });
+    });
   }
 
   /**
@@ -723,33 +1281,35 @@
    * Vẽ gói ảnh cắt (Image Cutout Preview) đúng kích thước FOV trong Inspector HUD
    */
   function drawCutoutPreview(obj, fov) {
-    const c = dom.cutoutPreviewCanvas;
-    if (!c) return;
-    const ctx = c.getContext("2d");
-    const w = c.width;
-    const h = c.height;
+    const canvases = [dom.cutoutCanvasT1, dom.cutoutCanvasT2, dom.cutoutPreviewCanvas].filter(Boolean);
+    canvases.forEach((c, idx) => {
+      const ctx = c.getContext("2d");
+      const w = c.width;
+      const h = c.height;
 
-    ctx.fillStyle = "#060b16";
-    ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = "#060b16";
+      ctx.fillRect(0, 0, w, h);
 
-    // Vẽ quầng sáng thiên thể ở tâm cutout
-    const r = Math.max(12, Math.min(48, (0.3 / Math.max(0.05, fov)) * 22));
-    const g = ctx.createRadialGradient(w / 2, h / 2, 1, w / 2, h / 2, r);
-    g.addColorStop(0, "#ffffff");
-    g.addColorStop(0.35, obj.colorTint || "#38bdf8");
-    g.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(w / 2, h / 2, r, 0, Math.PI * 2);
-    ctx.fill();
+      // Vẽ quầng sáng thiên thể ở tâm cutout (dịch nhẹ giữa T1 và T2 nếu thiên thể có chuyển động riêng lớn)
+      const shiftPx = idx === 1 && obj.pm_dec_arcsec_yr ? Math.max(-6, Math.min(6, obj.pm_dec_arcsec_yr * 0.4)) : 0;
+      const r = Math.max(12, Math.min(48, (0.3 / Math.max(0.05, fov)) * 22));
+      const g = ctx.createRadialGradient(w / 2, h / 2 - shiftPx, 1, w / 2, h / 2 - shiftPx, r);
+      g.addColorStop(0, "#ffffff");
+      g.addColorStop(0.35, obj.colorTint || "#38bdf8");
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2 - shiftPx, r, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Vẽ tâm chữ thập nhỏ và nhãn kích thước Cutout
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.5)";
-    ctx.strokeRect(4, 4, w - 8, h - 8);
-    ctx.fillStyle = "#bae6fd";
-    ctx.font = "10px 'JetBrains Mono', monospace";
-    ctx.fillText(`CUTOUT: ${fov}° × ${fov}°`, 10, 18);
-    ctx.fillText(`PIXELS: 256×256 (6.2"/px)`, 10, h - 10);
+      // Vẽ tâm chữ thập nhỏ và nhãn kích thước Cutout
+      ctx.strokeStyle = idx === 1 ? "rgba(245, 158, 11, 0.55)" : "rgba(56, 189, 248, 0.5)";
+      ctx.strokeRect(3, 3, w - 6, h - 6);
+      ctx.fillStyle = "#bae6fd";
+      ctx.font = "9px 'JetBrains Mono', monospace";
+      ctx.fillText(`FOV ${fov}°`, 8, 15);
+      ctx.fillText(`6.2"/px`, 8, h - 8);
+    });
   }
 
   /**
@@ -1083,19 +1643,34 @@
       if (irsaState.parsedFits) refreshRealFitsVisuals();
     });
 
-    if (dom.irsaFrameSelect) {
-      dom.irsaFrameSelect.addEventListener("change", async () => {
-        const idx = parseInt(dom.irsaFrameSelect.value, 10);
-        if (!isNaN(idx) && irsaState.siaRows[idx]) {
-          await loadAndRenderRealFitsFrame(
-            irsaState.siaRows[idx],
-            skyEngine.ra,
-            skyEngine.dec,
-            irsaState.cutoutSize,
-            irsaState.requestId
-          );
-        }
+    // 4b. Sự kiện Dual-Epoch (T1 vs T2) & Band Selector (D1..D6)
+    if (dom.detPillBtns) {
+      dom.detPillBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const det = parseInt(btn.dataset.det, 10);
+          if (!isNaN(det)) {
+            populateEpochControlsForDetector(det);
+          }
+        });
       });
+    }
+
+    if (dom.epochSelectT1) {
+      dom.epochSelectT1.addEventListener("change", () => {
+        updateBaselineStats();
+        triggerDualEpochCutoutFetch();
+      });
+    }
+
+    if (dom.epochSelectT2) {
+      dom.epochSelectT2.addEventListener("change", () => {
+        updateBaselineStats();
+        triggerDualEpochCutoutFetch();
+      });
+    }
+
+    if (dom.btnAutoMaxBaseline) {
+      dom.btnAutoMaxBaseline.addEventListener("click", handleAutoMaxBaseline);
     }
 
     dom.btnAutoContrast.addEventListener("click", () => {
@@ -1165,7 +1740,9 @@
     });
 
     // 7. Chuyển đổi thử nghiệm sang Aladin Lite v3 (Bản đồ ảnh thật AllWISE / DSS2 nếu có Internet)
-    dom.btnSwitchAladin.addEventListener("click", toggleAladinSurveyMode);
+    if (dom.btnSwitchAladin) {
+      dom.btnSwitchAladin.addEventListener("click", toggleAladinSurveyMode);
+    }
 
     // Đóng dropdown khi click ra ngoài
     document.addEventListener("click", (e) => {
@@ -1176,6 +1753,114 @@
 
     // 8. Sự kiện cho Cosmic Playlists & Tour Mode
     initCosmicPlaylistsEvents();
+
+    // 9. Sự kiện cho Modal Phóng to Ảnh FITS Chi tiết (FITS Zoom Lightbox)
+    initFitsZoomEvents();
+  }
+
+  function initFitsZoomEvents() {
+    // 1. Double click hoặc click icon trên Canvas T1 & Card T1
+    if (dom.cutoutCanvasT1) {
+      dom.cutoutCanvasT1.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        openFitsZoomModal("split");
+      });
+    }
+    if (dom.cardT1) {
+      dom.cardT1.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        openFitsZoomModal("split");
+      });
+      const tagT1 = dom.cardT1.querySelector(".preview-mini-tag");
+      if (tagT1) {
+        tagT1.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openFitsZoomModal("split");
+        });
+      }
+    }
+
+    // 2. Double click hoặc click icon trên Canvas T2 & Card T2
+    if (dom.cutoutCanvasT2) {
+      dom.cutoutCanvasT2.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        openFitsZoomModal("split");
+      });
+    }
+    if (dom.cardT2) {
+      dom.cardT2.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        openFitsZoomModal("split");
+      });
+      const tagT2 = dom.cardT2.querySelector(".preview-mini-tag");
+      if (tagT2) {
+        tagT2.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openFitsZoomModal("split");
+        });
+      }
+    }
+
+    // 3. Đóng Modal phóng to & so sánh
+    if (dom.btnCloseFitsZoom) {
+      dom.btnCloseFitsZoom.addEventListener("click", closeFitsZoomModal);
+    }
+    if (dom.fitsZoomBackdrop) {
+      dom.fitsZoomBackdrop.addEventListener("click", closeFitsZoomModal);
+    }
+
+    // 4. Chuyển đổi giữa chế độ Side-by-Side (Split) và Chớp nháy (Blink)
+    if (dom.btnModeSplit) {
+      dom.btnModeSplit.addEventListener("click", () => setDualViewMode("split"));
+    }
+    if (dom.btnModeBlink) {
+      dom.btnModeBlink.addEventListener("click", () => setDualViewMode("blink"));
+    }
+
+    // 5. Điều khiển Blink Play/Pause và Tốc độ nhấp nháy
+    if (dom.btnBlinkPlayPause) {
+      dom.btnBlinkPlayPause.addEventListener("click", toggleBlinkPlayPause);
+    }
+    if (dom.blinkSpeedSlider) {
+      dom.blinkSpeedSlider.addEventListener("input", () => {
+        if (dualViewState.isBlinking) {
+          startBlinkAnimation();
+        }
+      });
+    }
+
+    // 6. Khởi tạo bộ nút Magnification Pills [1x Chuẩn] [1.5x To] [2x Siêu To]
+    initMagnificationControls();
+
+    // 7. Đồng bộ tâm ngắm Reticle (Crosshair) và Pixel Inspector
+    if (dom.wrapSplitT1) {
+      dom.wrapSplitT1.addEventListener("mousemove", (e) => handleCrosshairMouseMove(e, dom.wrapSplitT1));
+      dom.wrapSplitT1.addEventListener("mouseleave", handleCrosshairMouseLeave);
+    }
+    if (dom.wrapSplitT2) {
+      dom.wrapSplitT2.addEventListener("mousemove", (e) => handleCrosshairMouseMove(e, dom.wrapSplitT2));
+      dom.wrapSplitT2.addEventListener("mouseleave", handleCrosshairMouseLeave);
+    }
+    if (dom.wrapBlinkMain) {
+      dom.wrapBlinkMain.addEventListener("mousemove", (e) => handleCrosshairMouseMove(e, dom.wrapBlinkMain));
+      dom.wrapBlinkMain.addEventListener("mouseleave", handleCrosshairMouseLeave);
+    }
+
+    // 8. Phím tắt toàn cục: ESC để đóng, Space để tạm dừng/bật Blink
+    document.addEventListener("keydown", (e) => {
+      if (dom.fitsZoomModal && !dom.fitsZoomModal.classList.contains("hidden")) {
+        if (e.key === "Escape") {
+          closeFitsZoomModal();
+        } else if (e.code === "Space" && (e.target === document.body || e.target === dom.fitsZoomModal)) {
+          e.preventDefault();
+          if (dualViewState.mode === "blink") {
+            toggleBlinkPlayPause();
+          } else {
+            setDualViewMode("blink");
+          }
+        }
+      }
+    });
   }
 
   // =========================================================================
@@ -1194,10 +1879,12 @@
   function initCosmicPlaylistsEvents() {
     renderPlaylistsAlbumView();
 
-    dom.btnOpenPlaylists.addEventListener("click", () => {
-      dom.cosmicPlaylistsModal.classList.remove("hidden");
-      showPlaylistsAlbumView();
-    });
+    if (dom.btnOpenPlaylists) {
+      dom.btnOpenPlaylists.addEventListener("click", () => {
+        dom.cosmicPlaylistsModal.classList.remove("hidden");
+        showPlaylistsAlbumView();
+      });
+    }
 
     dom.playlistsBackdrop.addEventListener("click", () => {
       dom.cosmicPlaylistsModal.classList.add("hidden");
@@ -1451,8 +2138,8 @@
 
     isAladinMode = !isAladinMode;
     if (isAladinMode) {
-      dom.aladinContainer.classList.remove("hidden");
-      dom.btnSwitchAladin.textContent = "✨ Quay lại SPHEREx 102-Band Canvas";
+      if (dom.aladinContainer) dom.aladinContainer.classList.remove("hidden");
+      if (dom.btnSwitchAladin) dom.btnSwitchAladin.textContent = "✨ Quay lại SPHEREx 102-Band Canvas";
       if (!aladinInstance && window.A.init) {
         window.A.init.then(() => {
           aladinInstance = window.A.aladin("#aladin-lite-div", {
@@ -1467,8 +2154,8 @@
         aladinInstance.setFoV(skyEngine.fov);
       }
     } else {
-      dom.aladinContainer.classList.add("hidden");
-      dom.btnSwitchAladin.textContent = "🛰️ Xem lớp ảnh AllWISE (Aladin Lite)";
+      if (dom.aladinContainer) dom.aladinContainer.classList.add("hidden");
+      if (dom.btnSwitchAladin) dom.btnSwitchAladin.textContent = "🛰️ Xem lớp ảnh AllWISE (Aladin Lite)";
     }
   }
 

@@ -1,0 +1,46 @@
+{
+  "id": "simbad_674280",
+  "name": "IRAS 03422+2404",
+  "aliases": [
+    "tic 385509299",
+    "gaia dr3 65274569368474368",
+    "iras 03422+2404",
+    "2mass j03451209+2413387",
+    "gaia dr2 65274569368474368"
+  ],
+  "category": "wonder",
+  "categoryLabel": "🌟 SIMBAD (* • Near-IR Stellar Source)",
+  "rank": "SIMBAD Verified",
+  "ra": 56.300398,
+  "dec": 24.227448,
+  "epoch": 2000.0,
+  "pm_ra_arcsec_yr": 0.0062,
+  "pm_dec_arcsec_yr": -0.008,
+  "defaultFov": 0.1,
+  "recommended_detectors": [
+    6,
+    5,
+    4,
+    3,
+    2,
+    1
+  ],
+  "distanceAU": "SIMBAD OID #674280 (Δ=75.0\")",
+  "description": "Ngôi sao / Thiên thể xác thực từ danh mục SIMBAD Quốc tế (IRAS 03422+2404, Phân loại quang phổ: Near-IR Stellar Source, Loại: *).",
+  "colorTint": "#38bdf8",
+  "spectralType": "Near-IR Stellar Source (*)",
+  "telemetry": {
+    "obsTime": "2025-08-15T20:45:11Z",
+    "epoch": "DR1 (SPHEREx All-Sky Survey)",
+    "detectorArray": "Detector D6 (4.41–5.01 µm)",
+    "imageFlux": 43.71,
+    "zodiFlux": 6.43,
+    "variance": 0.02,
+    "psfFwhm": 6.18,
+    "snr": 64.0,
+    "qualityFlag": "CLEAN",
+    "qualityCode": "0x0000",
+    "qualityMessage": "🟢 SẠCH NHIỄU (Đã xác thực từ SIMBAD & NASA IRSA)"
+  },
+  "spectrumProfile": "stellar_hot"
+}
