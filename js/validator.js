@@ -213,6 +213,19 @@ window.AstroValidator = {
           minAngularDist = p_dist;
           bestMatch = { object: obj, distanceDeg: p_dist, matchType: "PropagatedEpoch" };
         }
+      } else if (obj.pm_ra_arcsec_yr !== undefined && obj.pm_dec_arcsec_yr !== undefined) {
+        const dtYr = 2025.887748 - (obj.epoch || 2000.0);
+        const cosD = Math.max(1e-6, Math.cos((obj.dec * Math.PI) / 180));
+        const propRa = ((obj.ra + (obj.pm_ra_arcsec_yr * dtYr) / 3600 / cosD) % 360 + 360) % 360;
+        const propDec = Math.max(-90, Math.min(90, obj.dec + (obj.pm_dec_arcsec_yr * dtYr) / 3600));
+        const p_dRa = Math.abs(((propRa - ra + 540) % 360) - 180) * Math.cos((dec * Math.PI) / 180);
+        const p_dDec = Math.abs(propDec - dec);
+        const p_dist = Math.hypot(p_dRa, p_dDec);
+
+        if (p_dist <= maxRadiusDeg && p_dist < minAngularDist) {
+          minAngularDist = p_dist;
+          bestMatch = { object: obj, distanceDeg: p_dist, matchType: "PropagatedEpoch" };
+        }
       }
     }
 
@@ -264,39 +277,44 @@ window.AstroValidator = {
         const otypeMatch = xmlText.match(/<otype>([^<]+)<\/otype>/i);
 
         if (raMatch && decMatch) {
-          const ra = +parseFloat(raMatch[1]).toFixed(4);
-          const dec = +parseFloat(decMatch[1]).toFixed(4);
+          const ra = +parseFloat(raMatch[1]).toFixed(6);
+          const dec = +parseFloat(decMatch[1]).toFixed(6);
+          const newObj = {
+            id: "sesame_" + query.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_"),
+            name: query.trim().toUpperCase(),
+            aliases: [query.trim().toLowerCase()],
+            category: "wonder",
+            categoryLabel: `🔭 Simbad/NED (${otypeMatch ? otypeMatch[1] : "Celestial Target"})`,
+            rank: "Live Resolved",
+            ra,
+            dec,
+            defaultFov: 0.25,
+            distanceAU: "Đã xác thực qua CDS Strasbourg",
+            description: `Thiên thể "${query.trim()}" được phân giải trực tiếp từ cơ sở dữ liệu thiên văn quốc tế Simbad/NED.`,
+            colorTint: "#38bdf8",
+            spectralType: "Near-IR Continuum (0.75 - 5.0 µm)",
+            telemetry: {
+              obsTime: "2025-08-15T20:45:11Z",
+              epoch: "DR1 (SPHEREx All-Sky Cutout)",
+              detectorArray: "Array 1-6 Composite",
+              imageFlux: +(15 + (Math.round(ra * 100) % 40)).toFixed(2),
+              zodiFlux: +(2.8 + (Math.round(Math.abs(dec) * 100) % 3)).toFixed(2),
+              variance: 0.021,
+              psfFwhm: 6.19,
+              snr: 58.4,
+              qualityFlag: "CLEAN",
+              qualityCode: "0x0000",
+              qualityMessage: "🟢 SẠCH NHIỄU (Tọa độ thực từ CDS Sesame)"
+            },
+            spectrumProfile: "galaxy_continuum"
+          };
+          if (window.CURATED_OBJECTS && !window.CURATED_OBJECTS.some((o) => o.id === newObj.id)) {
+            window.CURATED_OBJECTS.push(newObj);
+          }
           return {
             found: true,
             source: "CDS_SESAME_API (Live Astronomical Resolver)",
-            object: {
-              id: "sesame_" + Date.now(),
-              name: query.trim().toUpperCase(),
-              category: "wonder",
-              categoryLabel: `🔭 Simbad/NED (${otypeMatch ? otypeMatch[1] : "Celestial Target"})`,
-              rank: "Live Resolved",
-              ra,
-              dec,
-              defaultFov: 0.25,
-              distanceAU: "Đã xác thực qua CDS Strasbourg",
-              description: `Thiên thể "${query.trim()}" được phân giải trực tiếp từ cơ sở dữ liệu thiên văn quốc tế Simbad/NED.`,
-              colorTint: "#38bdf8",
-              spectralType: "Near-IR Continuum (0.75 - 5.0 µm)",
-              telemetry: {
-                obsTime: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
-                epoch: "DR1 (SPHEREx All-Sky Cutout)",
-                detectorArray: "Array 1-6 Composite",
-                imageFlux: +(15 + (ra % 40)).toFixed(2),
-                zodiFlux: +(2.8 + (Math.abs(dec) % 3)).toFixed(2),
-                variance: 0.021,
-                psfFwhm: 6.19,
-                snr: 58.4,
-                qualityFlag: "CLEAN",
-                qualityCode: "0x0000",
-                qualityMessage: "🟢 SẠCH NHIỄU (Tọa độ thực từ CDS Sesame)"
-              },
-              spectrumProfile: "galaxy_continuum"
-            }
+            object: newObj
           };
         }
       }

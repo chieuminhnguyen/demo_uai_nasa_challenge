@@ -274,14 +274,14 @@ class SpherexSkyEngine {
 
       this.ra = ((this.dragStart.ra + dx / (scale * cosDec)) % 360 + 360) % 360;
       this.dec = Math.max(-90, Math.min(90, this.dragStart.dec + dy / scale));
-      this._notifyViewChange();
+      this._notifyViewChange(false, false, true);
     });
 
     window.addEventListener("mouseup", () => {
       if (this.isDragging) {
         this.isDragging = false;
         this.canvas.style.cursor = "grab";
-        this._notifyViewChange(true);
+        this._notifyViewChange(true, false, true);
       }
     });
 
@@ -295,7 +295,7 @@ class SpherexSkyEngine {
         const nextFov = Math.max(0.02, Math.min(60, +(this.fov * zoomFactor).toFixed(3)));
         const hitLimit = this.fov <= 0.021 && e.deltaY < 0;
         this.fov = nextFov;
-        this._notifyViewChange(false, hitLimit);
+        this._notifyViewChange(false, hitLimit, true);
       },
       { passive: false }
     );
@@ -310,14 +310,15 @@ class SpherexSkyEngine {
     });
   }
 
-  _notifyViewChange(isFinal = false, hitResolutionLimit = false) {
+  _notifyViewChange(isFinal = false, hitResolutionLimit = false, isUserInteraction = false) {
     if (this.callbacks.onViewChange) {
       this.callbacks.onViewChange({
-        ra: +this.ra.toFixed(4),
-        dec: +this.dec.toFixed(4),
+        ra: +this.ra.toFixed(6),
+        dec: +this.dec.toFixed(6),
         fov: +this.fov.toFixed(3),
         isFinal,
-        hitResolutionLimit
+        hitResolutionLimit,
+        isUserInteraction
       });
     }
   }

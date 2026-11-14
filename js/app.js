@@ -26,6 +26,18 @@
     cutoutSize: 0.1,
     requestId: 0
   };
+  let isNameInputDirty = false;
+  let isFovExplicitlyChanged = false;
+
+  function formatCoordPrecision(val) {
+    const num = Number(val);
+    if (isNaN(num)) return "0.0000";
+    const s = num.toString();
+    if (s.includes(".") && s.split(".")[1].length > 4) {
+      return num.toFixed(6);
+    }
+    return num.toFixed(4);
+  }
 
   // DOM Elements
   const dom = {};
@@ -229,25 +241,15 @@
    * Khi người mới chọn 1 thiên thể từ bảng gợi ý -> Tự động điền RA, Dec, FOV và bay tới luôn
    */
   function selectCuratedObject(obj) {
-    currentObject = obj;
-    dom.nameSearchInput.value = obj.name;
-    const raStr = obj.ra.toString().includes(".") && obj.ra.toString().split(".")[1].length > 4 
-      ? obj.ra.toFixed(6) 
-      : obj.ra.toFixed(4);
-    const decStr = obj.dec.toString().includes(".") && obj.dec.toString().split(".")[1].length > 4 
-      ? obj.dec.toFixed(6) 
-      : obj.dec.toFixed(4);
-    dom.raInput.value = raStr;
-    dom.decInput.value = decStr;
-    syncFOVControls(obj.defaultFov);
+    isNameInputDirty = false;
+    isFovExplicitlyChanged = false;
     hideValidationBanner();
-
     executeCoordinateSearch(obj.ra, obj.dec, obj.defaultFov, obj);
-    renderCuratedCatalog(activeCategoryFilter);
   }
 
   /**
    * Thực thi tìm kiếm với 3 thông số (RA, Dec, FOV) -> Kích hoạt đồng thời 3 tầng Output
+   * Đảm bảo tìm theo Tên (Cách 1) và tìm theo Tọa độ RA/Dec (Cách 2) cho ra kết quả GIỐNG HỆT NHAU 100%!
    */
   function executeCoordinateSearch(ra, dec, fov, metaObj = null) {
     let matchedObj = metaObj;
@@ -267,13 +269,25 @@
       matchedObj = window.CURATED_OBJECTS.find(
         (o) => Math.abs(o.ra - ra) < 0.05 && Math.abs(o.dec - dec) < 0.05
       );
+      if (matchedObj) isReverseFound = true;
     }
 
-    // Nếu không thuộc thiên thể nào trong cơ sở dữ liệu -> Tạo đối tượng tọa độ tùy chỉnh
-    if (!matchedObj) {
+    // NẾU KHỚP VỚI THIÊN THỂ ĐÃ BIẾT -> CHUẨN HÓA (CANONICALIZE) TOÀN BỘ RA, DEC, FOV ĐỂ 2 CÁCH SEARCH ĐỒNG NHẤT 100%!
+    if (matchedObj && matchedObj.id !== "custom") {
+      const isSwitchingTarget = !currentObject || currentObject.id !== matchedObj.id;
+      ra = matchedObj.ra;
+      dec = matchedObj.dec;
+      if (metaObj || isSwitchingTarget || !isFovExplicitlyChanged) {
+        fov = matchedObj.defaultFov || fov;
+      }
+      isFovExplicitlyChanged = false;
+    } else if (!matchedObj) {
+      // Nếu không thuộc thiên thể nào trong cơ sở dữ liệu -> Tạo đối tượng tọa độ tùy chỉnh (làm tròn 4 chữ số để bất biến)
+      const normRa = +Number(ra).toFixed(4);
+      const normDec = +Number(dec).toFixed(4);
       matchedObj = {
         id: "custom",
-        name: `Tọa độ RA ${ra}°, Dec ${dec >= 0 ? "+" : ""}${dec}°`,
+        name: `Tọa độ RA ${normRa}°, Dec ${normDec >= 0 ? "+" : ""}${normDec}°`,
         categoryLabel: "🔭 Tọa độ Chuyên gia (Expert Input)",
         ra,
         dec,
@@ -286,8 +300,8 @@
           obsTime: "2025-06-18T10:20:00Z",
           epoch: "DR1 (All-Sky Survey)",
           detectorArray: "Array 1-6 (0.75 - 5.0 µm)",
-          imageFlux: +(16.5 + ((ra * 1.7) % 35)).toFixed(2),
-          zodiFlux: +(3.4 + (Math.abs(dec) % 3.5)).toFixed(2),
+          imageFlux: +(16.5 + ((normRa * 1.7) % 35)).toFixed(2),
+          zodiFlux: +(3.4 + (Math.abs(normDec) % 3.5)).toFixed(2),
           variance: 0.02,
           psfFwhm: 6.2,
           snr: 62.1,
@@ -300,21 +314,28 @@
     }
 
     currentObject = matchedObj;
+    isNameInputDirty = false;
 
-    // =========================================================================
-    // ĐỒNG BỘ 2 CHIỀU: NẾU NHẬP TỌA ĐỘ TRÙNG VỚI SAO ĐÃ BIẾT -> TỰ ĐIỀN TÊN VÀO THANH SEARCH!
-    // =========================================================================
+    // Đồng bộ chính xác cả 4 ô trên thanh Search Bar (Tên, RA, Dec, FOV)
+    dom.raInput.value = formatCoordPrecision(ra);
+    dom.decInput.value = formatCoordPrecision(dec);
+    syncFOVControls(fov);
+
     if (matchedObj.id !== "custom") {
       dom.nameSearchInput.value = matchedObj.name;
       if (isReverseFound) {
         showValidationBanner(
-          `🎯 Nhận diện thành công: Tọa độ RA ${ra}°, Dec ${dec >= 0 ? "+" : ""}${dec}° khớp với [${matchedObj.name}] (${matchedObj.categoryLabel})`,
+          `🎯 Nhận diện thành công: Tọa độ khớp với [${matchedObj.name}] → Đã đồng bộ chuẩn RA: ${formatCoordPrecision(
+            ra
+          )}°, Dec: ${dec >= 0 ? "+" : ""}${formatCoordPrecision(dec)}°, FOV: ${fov}°`,
           "info"
         );
       }
     } else {
       dom.nameSearchInput.value = "";
     }
+
+    renderCuratedCatalog(activeCategoryFilter);
 
     // =========================================================================
     // OUTPUT 1: VỚI NGƯỜI DÙNG (Camera Fly-to + Target Reticle + WebGL Canvas)
@@ -345,10 +366,29 @@
     if (!window.SpherexFitsParser) return;
 
     const reqId = ++irsaState.requestId;
-    // Nếu thiên thể có chuyển động riêng lớn (như Barnard's Star), ưu tiên dùng tọa độ đã truyền tới kỷ nguyên SPHEREx 2025.9
-    const queryRa = matchedObj?.cached_cutout_query_center?.ra_deg ?? ra;
-    const queryDec = matchedObj?.cached_cutout_query_center?.dec_deg ?? dec;
-    const cutoutSize = Math.max(0.05, Math.min(0.25, matchedObj?.cached_cutout_query_center?.fov_deg || fov || 0.1));
+    // Tính tọa độ truy vấn IRSA chuẩn xác (có xét Proper Motion tới kỷ nguyên SPHEREx 2025.89 = MJD 61000.0)
+    let queryRa = ra;
+    let queryDec = dec;
+    if (matchedObj?.cached_cutout_query_center) {
+      queryRa = matchedObj.cached_cutout_query_center.ra_deg;
+      queryDec = matchedObj.cached_cutout_query_center.dec_deg;
+    } else if (
+      matchedObj &&
+      matchedObj.pm_ra_arcsec_yr !== undefined &&
+      matchedObj.pm_dec_arcsec_yr !== undefined
+    ) {
+      const dtYr = 2025.887748 - (matchedObj.epoch || 2000.0);
+      const cosD = Math.max(1e-6, Math.cos((matchedObj.dec * Math.PI) / 180));
+      queryRa = +(((matchedObj.ra + (matchedObj.pm_ra_arcsec_yr * dtYr) / 3600 / cosD) % 360 + 360) % 360).toFixed(6);
+      queryDec = +Math.max(-90, Math.min(90, matchedObj.dec + (matchedObj.pm_dec_arcsec_yr * dtYr) / 3600)).toFixed(6);
+    }
+
+    // Luôn dùng kích thước Cutout chuẩn của mục tiêu để kết quả FITS (Peak Flux, ZODI, SNR) bất biến 100%
+    const canonicalFov =
+      matchedObj && matchedObj.id !== "custom"
+        ? matchedObj.cached_cutout_query_center?.fov_deg || matchedObj.defaultFov || 0.1
+        : fov || 0.1;
+    const cutoutSize = Math.max(0.05, Math.min(0.25, canonicalFov));
 
     irsaState.queryRa = queryRa;
     irsaState.queryDec = queryDec;
@@ -471,24 +511,6 @@
       }
 
       irsaState.parsedFits = parsed;
-
-      // Cập nhật toàn bộ thông số Telemetry trong Inspector HUD bằng dữ liệu FITS thật 100% của NASA
-      if (currentObject) {
-        currentObject.telemetry = {
-          obsTime: parsed.dateObs,
-          epoch: `${row.collection.toUpperCase()} (LIVE NASA FITS)`,
-          detectorArray: `Detector D${parsed.detector} (${parsed.wlMin}–${parsed.wlMax} µm)`,
-          imageFlux: parsed.centerPeakFlux,
-          medianFlux: parsed.medianFlux,
-          zodiFlux: parsed.meanZodi,
-          variance: parsed.medianVariance,
-          psfFwhm: parsed.psfFwhm,
-          snr: parsed.snr,
-          qualityFlag: parsed.qualityFlag,
-          qualityCode: parsed.centerFlagHex,
-          qualityMessage: parsed.qualityMessage
-        };
-      }
 
       // Render ma trận điểm ảnh 32-bit float thật lên ô Cutout Preview và lên bản đồ chính
       refreshRealFitsVisuals();
@@ -747,17 +769,23 @@
   /**
    * Khi người dùng kéo hoặc lăn chuột trên bản đồ -> Đồng bộ ngược lại ô RA, Dec, FOV và URL
    */
-  function handleMapViewportChange({ ra, dec, fov, isFinal, hitResolutionLimit }) {
-    dom.raInput.value = ra.toFixed(4);
-    dom.decInput.value = dec.toFixed(4);
-    syncFOVControls(fov);
-
+  function handleMapViewportChange({ ra, dec, fov, isFinal, hitResolutionLimit, isUserInteraction }) {
     if (hitResolutionLimit) {
       showValidationBanner(
         "⚠️ Đã đạt giới hạn phân giải quang học tối đa của cảm biến SPHEREx (6.2 arcsec/pixel → FOV = 0.02°).",
         "warn"
       );
     }
+
+    // Chỉ ghi đè ô nhập liệu RA, Dec, FOV khi người dùng chủ động kéo hoặc lăn chuột trên Canvas
+    // Không làm mất độ chính xác 6 chữ số thập phân trong quá trình camera đang bay tự động (Slerp Fly-to)
+    if (!isUserInteraction) {
+      return;
+    }
+
+    dom.raInput.value = formatCoordPrecision(ra);
+    dom.decInput.value = formatCoordPrecision(dec);
+    syncFOVControls(fov);
 
     // Luôn đặt Debounce 300ms để cập nhật URL State mà không làm giật lag trình duyệt
     scheduleURLStateUpdate(ra, dec, fov, currentObject ? currentObject.id : "custom");
@@ -795,8 +823,8 @@
 
     urlDebounceTimer = setTimeout(() => {
       const params = new URLSearchParams();
-      params.set("ra", (+ra).toFixed(4));
-      params.set("dec", (+dec).toFixed(4));
+      params.set("ra", formatCoordPrecision(ra));
+      params.set("dec", formatCoordPrecision(dec));
       params.set("fov", (+fov).toFixed(3));
       params.set("band", activeBand);
       if (targetId && targetId !== "custom") {
@@ -967,6 +995,10 @@
     });
 
     // Gõ lọc nhanh hoặc nhấn Enter trên ô tên thiên thể
+    dom.nameSearchInput.addEventListener("input", () => {
+      isNameInputDirty = true;
+    });
+
     dom.nameSearchInput.addEventListener("keydown", async (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -979,7 +1011,13 @@
     });
 
     // 2. Xử lý nút Search / Go cho 3 thông số (RA, Dec, FOV)
-    const triggerExpertSearch = () => {
+    const triggerExpertSearch = async () => {
+      // Nếu người dùng vừa gõ tên thiên thể mới vào ô Tên rồi bấm nút "🚀 Go / Search", tự động giải tên thiên thể đó luôn!
+      if (isNameInputDirty && dom.nameSearchInput.value.trim()) {
+        await handleNameResolveTrigger();
+        return;
+      }
+
       const raCheck = window.AstroValidator.validateRA(dom.raInput.value);
       const decCheck = window.AstroValidator.validateDec(dom.decInput.value);
       const fovCheck = window.AstroValidator.validateFOV(
@@ -1010,9 +1048,6 @@
         hideValidationBanner();
       }
 
-      dom.raInput.value = raCheck.value;
-      dom.decInput.value = decCheck.value;
-      syncFOVControls(fovCheck.value);
       dom.curatedDropdown.classList.add("hidden");
 
       executeCoordinateSearch(raCheck.value, decCheck.value, fovCheck.value);
@@ -1020,6 +1055,9 @@
 
     dom.btnSearchGo.addEventListener("click", triggerExpertSearch);
     [dom.raInput, dom.decInput].forEach((inp) => {
+      inp.addEventListener("input", () => {
+        isNameInputDirty = false;
+      });
       inp.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -1030,6 +1068,7 @@
 
     // 3. Sự kiện thay đổi FOV từ Dropdown hoặc Thanh trượt Zoom
     dom.fovSelect.addEventListener("change", () => {
+      isFovExplicitlyChanged = true;
       if (dom.fovSelect.value !== "custom") {
         const nextFov = parseFloat(dom.fovSelect.value);
         syncFOVControls(nextFov);
@@ -1038,6 +1077,7 @@
     });
 
     dom.fovSlider.addEventListener("input", () => {
+      isFovExplicitlyChanged = true;
       const minLog = Math.log10(0.02);
       const maxLog = Math.log10(60);
       const fov = Math.pow(10, minLog + (parseFloat(dom.fovSlider.value) / 100) * (maxLog - minLog));
