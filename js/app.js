@@ -156,34 +156,10 @@
         dom.flightStatusBadge.textContent = "🎯 ĐÃ KHÓA MỤC TIÊU (TARGET LOCKED)";
         dom.flightStatusBadge.className = "status-pill status-locked";
       },
-      onCanvasPick: (ra, dec) => {
-        dom.raInput.value = ra;
-        dom.decInput.value = dec;
-        executeCoordinateSearch(ra, dec, skyEngine.fov, {
-          name: `Vùng trinh sát (${ra.toFixed(2)}°, ${dec.toFixed(2)}°)`,
-          categoryLabel: "🔭 Điểm chọn trực tiếp trên Canvas",
-          ra,
-          dec,
-          defaultFov: skyEngine.fov,
-          distanceAU: "Tọa độ tùy chọn",
-          description: "Điểm bầu trời được chọn trực tiếp bằng thao tác nhấp đúp trên bản đồ tương tác SPHEREx.",
-          colorTint: "#38bdf8",
-          spectralType: "Near-IR Background & Point Source",
-          telemetry: {
-            obsTime: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
-            epoch: "DR1 (All-Sky Survey)",
-            detectorArray: "Array 1-6 (0.75 - 5.0 µm)",
-            imageFlux: +(12.4 + ((ra * 3) % 25)).toFixed(2),
-            zodiFlux: +(3.2 + (Math.abs(dec) % 4)).toFixed(2),
-            variance: 0.022,
-            psfFwhm: 6.2,
-            snr: 48.0,
-            qualityFlag: "CLEAN",
-            qualityCode: "0x0000",
-            qualityMessage: "🟢 SẠCH NHIỄU (Điểm ảnh hợp lệ)"
-          },
-          spectrumProfile: "galaxy_continuum"
-        });
+      onCanvasPick: async (ra, dec) => {
+        dom.raInput.value = formatCoordPrecision(ra);
+        dom.decInput.value = formatCoordPrecision(dec);
+        await executeCoordinateSearch(ra, dec, skyEngine.fov, null);
       }
     });
 
@@ -251,16 +227,26 @@
    * Thực thi tìm kiếm với 3 thông số (RA, Dec, FOV) -> Kích hoạt đồng thời 3 tầng Output
    * Đảm bảo tìm theo Tên (Cách 1) và tìm theo Tọa độ RA/Dec (Cách 2) cho ra kết quả GIỐNG HỆT NHAU 100%!
    */
-  function executeCoordinateSearch(ra, dec, fov, metaObj = null) {
+  async function executeCoordinateSearch(ra, dec, fov, metaObj = null) {
     let matchedObj = metaObj;
     let isReverseFound = false;
 
-    // Nếu không truyền metaObj (người dùng nhập tay tọa độ), thực hiện Tra cứu ngược (Reverse Lookup)
-    if (!matchedObj && window.AstroValidator && window.AstroValidator.reverseLookup) {
-      const rev = window.AstroValidator.reverseLookup(ra, dec, 0.35);
-      if (rev.found) {
-        matchedObj = rev.object;
+    // Nếu không truyền metaObj (người dùng nhập tay tọa độ), thực hiện Tra cứu ngược (Local + Live SIMBAD TAP)
+    if (!matchedObj && window.AstroValidator) {
+      const localRev = window.AstroValidator.reverseLookup(ra, dec, 0.35);
+      if (localRev.found) {
+        matchedObj = localRev.object;
         isReverseFound = true;
+      } else if (window.AstroValidator.reverseLookupAsync) {
+        showValidationBanner(
+          `🛰️ Đang tra cứu tên ngôi sao tại tọa độ (RA: ${ra}°, Dec: ${dec}°) trên danh mục thiên văn SIMBAD...`,
+          "info"
+        );
+        const asyncRev = await window.AstroValidator.reverseLookupAsync(ra, dec, 0.35);
+        if (asyncRev.found) {
+          matchedObj = asyncRev.object;
+          isReverseFound = true;
+        }
       }
     }
 

@@ -242,9 +242,43 @@ window.AstroValidator = {
   },
 
   /**
+   * Tra cứu ngược Tọa độ RA, Dec sang Tên Ngôi Sao / Thiên Thể (Bất đồng bộ: Local Cache + Live SIMBAD TAP)
+   */
+  async reverseLookupAsync(ra, dec, maxRadiusDeg = 0.35) {
+    // 1. Kiểm tra ngay trong danh mục Local / Cache trên trình duyệt (0ms)
+    const localMatch = this.reverseLookup(ra, dec, maxRadiusDeg);
+    if (localMatch.found) {
+      return localMatch;
+    }
+
+    // 2. Truy vấn trực tiếp cơ sở dữ liệu thiên văn quốc tế SIMBAD TAP qua Python Backend
+    try {
+      const resp = await fetch(`/api/astro/reverse?ra=${ra}&dec=${dec}&radius=0.08`);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.found && data.object) {
+          if (window.CURATED_OBJECTS && !window.CURATED_OBJECTS.some((o) => o.id === data.object.id)) {
+            window.CURATED_OBJECTS.push(data.object);
+          }
+          return {
+            found: true,
+            object: data.object,
+            distanceDeg: 0,
+            matchType: "SIMBAD_LIVE"
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("SIMBAD reverse lookup fallback:", err);
+    }
+
+    return { found: false };
+  },
+
+  /**
    * Phân giải tên thiên thể (Name Resolver)
    * Bước 1: Tìm trong Curated Database (0ms)
-   * Bước 2: Gọi trực tiếp API CDS Sesame (Viện Thiên văn Strasbourg)
+   * Bước 2: Gọi Python Backend (/api/astro/resolve -> CDS Sesame + SIMBAD TAP Canonicalizer)
    */
   async resolveName(query) {
     const q = String(query || "").trim().toLowerCase();
@@ -254,8 +288,9 @@ window.AstroValidator = {
     const localHit = window.CURATED_OBJECTS.find(
       (obj) =>
         obj.id.toLowerCase() === q ||
+        obj.name.toLowerCase() === q ||
         obj.name.toLowerCase().includes(q) ||
-        obj.aliases.some((a) => a.toLowerCase().includes(q))
+        (obj.aliases && obj.aliases.some((a) => a.toLowerCase() === q || a.toLowerCase().includes(q)))
     );
 
     if (localHit) {
@@ -266,7 +301,27 @@ window.AstroValidator = {
       };
     }
 
-    // 2. Gọi API CDS Sesame Name Resolver cho bất kỳ thiên thể nào trong vũ trụ
+    // 2. Gọi Python Backend chuẩn hóa qua CDS Sesame + SIMBAD TAP để đồng nhất 100% với tra cứu tọa độ
+    try {
+      const apiRes = await fetch(`/api/astro/resolve?q=${encodeURIComponent(query.trim())}`);
+      if (apiRes.ok) {
+        const data = await apiRes.json();
+        if (data.found && data.object) {
+          if (window.CURATED_OBJECTS && !window.CURATED_OBJECTS.some((o) => o.id === data.object.id)) {
+            window.CURATED_OBJECTS.push(data.object);
+          }
+          return {
+            found: true,
+            source: "SIMBAD + CDS Sesame (Canonical)",
+            object: data.object
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("Backend resolve fallback:", e);
+    }
+
+    // 3. Dự phòng gọi trực tiếp API CDS Sesame nếu chạy độc lập
     try {
       const url = `https://cds.unistra.fr/cgi-bin/nph-sesame/-oxp/SNV?${encodeURIComponent(query.trim())}`;
       const res = await fetch(url);

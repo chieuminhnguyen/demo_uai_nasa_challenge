@@ -7,7 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,6 +18,8 @@ from backend.services.irsa_client import (
     fetch_irsa_fits_cutout,
     parse_sia_csv_rows,
     query_irsa_sia_csv,
+    resolve_name_astronomical,
+    reverse_lookup_simbad,
 )
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -37,6 +39,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def disable_static_browser_cache(request: Request, call_next):
+    """Ensure browser always loads latest JS/CSS/HTML during live development."""
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith(("/js/", "/css/")):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return response
 
 
 @app.get("/api/health")
@@ -91,6 +102,40 @@ async def resolve_target_endpoint(q: str = Query(..., description="Target name o
     if not found:
         raise HTTPException(status_code=404, detail=f"Target '{q}' not found in benchmark catalog.")
     return {"found": True, "target": found}
+
+
+@app.get("/api/astro/reverse")
+async def astro_reverse_lookup(
+    ra: float = Query(..., ge=0.0, le=360.0),
+    dec: float = Query(..., ge=-90.0, le=90.0),
+    radius: float = Query(default=0.08, ge=0.005, le=1.0),
+):
+    """
+    Live Astronomical Reverse Coordinate Lookup via Harvard/CDS SIMBAD TAP.
+    Given any (RA, Dec) in the sky, identifies the star/celestial object at that coordinate.
+    """
+    try:
+        star_obj = await reverse_lookup_simbad(ra=ra, dec=dec, radius_deg=radius)
+        if star_obj is None:
+            return JSONResponse({"found": False})
+        return JSONResponse({"found": True, "source": "SIMBAD_TAP", "object": star_obj})
+    except Exception as exc:
+        return JSONResponse({"found": False, "error": str(exc)})
+
+
+@app.get("/api/astro/resolve")
+async def astro_resolve_name(q: str = Query(..., description="Celestial object name")):
+    """
+    Live Astronomical Name Resolver via CDS Sesame + SIMBAD TAP Canonicalizer.
+    Returns the exact same canonical object structure as `/api/astro/reverse`.
+    """
+    try:
+        star_obj = await resolve_name_astronomical(q)
+        if star_obj is None:
+            return JSONResponse({"found": False})
+        return JSONResponse({"found": True, "source": "SESAME_SIMBAD_CANONICAL", "object": star_obj})
+    except Exception as exc:
+        return JSONResponse({"found": False, "error": str(exc)})
 
 
 @app.get("/api/irsa/sia")
