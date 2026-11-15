@@ -413,80 +413,13 @@ window.SpherexFitsParser = {
    * Sử dụng thuật toán Asinh Stretch chuẩn thiên văn (giống SAOImage DS9 / Aladin)
    */
   renderFitsToCanvas(parsedFits, targetCanvas, options = {}) {
-    if (!parsedFits || !parsedFits.valid || !targetCanvas) return null;
+    if (!parsedFits || !parsedFits.valid) return null;
 
-    const {
-      subtractZodi = false,
-      brightness = 0,
-      contrast = 1.15,
-      colormap = "infrared"
-    } = options;
+    const offCanvas = this.renderFitsToOffscreen(parsedFits, options);
+    if (!offCanvas || !targetCanvas) return offCanvas;
 
-    const imgHdu = parsedFits.hdus["IMAGE"];
-    const zodHdu = parsedFits.hdus["ZODI"];
-    const flgHdu = parsedFits.hdus["FLAGS"];
     const w = parsedFits.width;
     const h = parsedFits.height;
-    const img = imgHdu.matrix;
-    const zod = zodHdu?.matrix || null;
-    const flg = flgHdu?.matrix || null;
-
-    // Tạo offscreen canvas đúng kích thước pixel gốc của Cutout (VD: 58x59)
-    const offCanvas = document.createElement("canvas");
-    offCanvas.width = w;
-    offCanvas.height = h;
-    const offCtx = offCanvas.getContext("2d");
-    const imgData = offCtx.createImageData(w, h);
-    const data = imgData.data;
-
-    // Ngưỡng nền và ngưỡng đỉnh để co giãn tương phản Asinh
-    const bgBase = subtractZodi && zod ? parsedFits.p50 - parsedFits.meanZodi : parsedFits.p50;
-    const dynamicRange = Math.max(0.5, parsedFits.p99 - parsedFits.p10);
-    const softFactor = 3.2 * contrast;
-    const brightShift = brightness / 120;
-
-    for (let y = 0; y < h; y++) {
-      // Trong FITS thiên văn, trục Y (NAXIS2) tính từ dưới lên trên, nên lật ngược trục Y khi vẽ lên Canvas
-      const fitsRow = h - 1 - y;
-      for (let x = 0; x < w; x++) {
-        const idx = fitsRow * w + x;
-        let val = img[idx];
-        if (subtractZodi && zod && !isNaN(zod[idx])) {
-          val -= zod[idx];
-        }
-
-        let norm = 0;
-        if (!isNaN(val) && isFinite(val)) {
-          const shifted = (val - bgBase) / dynamicRange;
-          norm = Math.asinh(shifted * softFactor) / Math.asinh(softFactor) + brightShift;
-          norm = Math.max(0, Math.min(1, norm));
-        }
-
-        const outIdx = (y * w + x) * 4;
-        // Tô màu theo bảng màu Hồng ngoại SPHEREx (Đen sâu -> Xanh lam -> Cam vàng -> Trắng sáng)
-        if (colormap === "infrared") {
-          data[outIdx] = Math.min(255, Math.round(Math.pow(norm, 0.75) * 255));
-          data[outIdx + 1] = Math.min(255, Math.round(Math.pow(norm, 1.05) * 235));
-          data[outIdx + 2] = Math.min(255, Math.round((Math.pow(norm, 0.55) * 0.65 + Math.pow(norm, 1.8) * 0.55) * 255));
-          data[outIdx + 3] = 255;
-        } else {
-          const g = Math.round(norm * 255);
-          data[outIdx] = g;
-          data[outIdx + 1] = g;
-          data[outIdx + 2] = g;
-          data[outIdx + 3] = 255;
-        }
-
-        // Nếu người dùng bật hiển thị cờ lỗi và pixel dính tia vũ trụ mạnh, đánh dấu viền đỏ nhẹ
-        if (flg && (flg[idx] & 0x0006)) {
-          data[outIdx] = 255;
-          data[outIdx + 1] = 90;
-          data[outIdx + 2] = 90;
-        }
-      }
-    }
-
-    offCtx.putImageData(imgData, 0, 0);
 
     // Vẽ phóng to lên targetCanvas
     const ctx = targetCanvas.getContext("2d");
@@ -506,6 +439,381 @@ window.SpherexFitsParser = {
     ctx.fillText(`Peak: ${parsedFits.centerPeakFlux} MJy/sr`, 5, targetCanvas.height - 5);
     ctx.restore();
 
+    return offCanvas;
+  },
+
+  /**
+   * Render clean offscreen canvas (no text overlays) from parsed FITS or WCS-aligned grid.
+   */
+  renderFitsToOffscreen(parsedOrGrid, options = {}) {
+    if (!parsedOrGrid || !parsedOrGrid.valid) return null;
+
+    const {
+      subtractZodi = false,
+      brightness = 0,
+      contrast = 1.15,
+      colormap = "infrared",
+      stretchRef = null
+    } = options;
+
+    const isAlignedGrid = !!parsedOrGrid.isAlignedGrid;
+    const w = parsedOrGrid.width;
+    const h = parsedOrGrid.height;
+    const img = isAlignedGrid ? parsedOrGrid.image : parsedOrGrid.hdus?.["IMAGE"]?.matrix;
+    const zod = isAlignedGrid ? parsedOrGrid.zodi : parsedOrGrid.hdus?.["ZODI"]?.matrix || null;
+    const flg = isAlignedGrid ? parsedOrGrid.flags : parsedOrGrid.hdus?.["FLAGS"]?.matrix || null;
+    if (!img) return null;
+
+    const offCanvas = document.createElement("canvas");
+    offCanvas.width = w;
+    offCanvas.height = h;
+    const offCtx = offCanvas.getContext("2d");
+    const imgData = offCtx.createImageData(w, h);
+    const data = imgData.data;
+
+    const ref = stretchRef || parsedOrGrid;
+    const bgBase = subtractZodi && zod ? (ref.p50 ?? 0) - (ref.meanZodi ?? 0) : (ref.p50 ?? 0);
+    const dynamicRange = Math.max(0.5, (ref.p99 ?? 1) - (ref.p10 ?? 0));
+    const softFactor = 3.2 * contrast;
+    const brightShift = brightness / 120;
+
+    for (let y = 0; y < h; y++) {
+      // Raw FITS has bottom-up Y; aligned sky grid is already top-down North-Up
+      const srcRow = isAlignedGrid ? y : h - 1 - y;
+      for (let x = 0; x < w; x++) {
+        const idx = srcRow * w + x;
+        let val = img[idx];
+        if (subtractZodi && zod && !isNaN(zod[idx]) && isFinite(zod[idx])) {
+          val -= zod[idx];
+        }
+
+        const outIdx = (y * w + x) * 4;
+        if (isNaN(val) || !isFinite(val)) {
+          data[outIdx] = 2;
+          data[outIdx + 1] = 5;
+          data[outIdx + 2] = 12;
+          data[outIdx + 3] = 255;
+          continue;
+        }
+
+        const shifted = (val - bgBase) / dynamicRange;
+        let norm = Math.asinh(shifted * softFactor) / Math.asinh(softFactor) + brightShift;
+        norm = Math.max(0, Math.min(1, norm));
+
+        if (colormap === "infrared") {
+          data[outIdx] = Math.min(255, Math.round(Math.pow(norm, 0.75) * 255));
+          data[outIdx + 1] = Math.min(255, Math.round(Math.pow(norm, 1.05) * 235));
+          data[outIdx + 2] = Math.min(255, Math.round((Math.pow(norm, 0.55) * 0.65 + Math.pow(norm, 1.8) * 0.55) * 255));
+          data[outIdx + 3] = 255;
+        } else {
+          const g = Math.round(norm * 255);
+          data[outIdx] = g;
+          data[outIdx + 1] = g;
+          data[outIdx + 2] = g;
+          data[outIdx + 3] = 255;
+        }
+
+        if (flg && (flg[idx] & 0x0006)) {
+          data[outIdx] = 255;
+          data[outIdx + 1] = 90;
+          data[outIdx + 2] = 90;
+        }
+      }
+    }
+
+    offCtx.putImageData(imgData, 0, 0);
+    return offCanvas;
+  },
+
+  /**
+   * Parse 2D TAN (Gnomonic) WCS parameters from FITS IMAGE header.
+   */
+  parseWcsFromHeader(header) {
+    if (!header) return null;
+    const crval1 = Number(header["CRVAL1"]);
+    const crval2 = Number(header["CRVAL2"]);
+    const crpix1 = Number(header["CRPIX1"]);
+    const crpix2 = Number(header["CRPIX2"]);
+    if (![crval1, crval2, crpix1, crpix2].every(Number.isFinite)) return null;
+
+    let cd11, cd12, cd21, cd22;
+    if (Number.isFinite(Number(header["CD1_1"]))) {
+      cd11 = Number(header["CD1_1"]);
+      cd12 = Number(header["CD1_2"] || 0);
+      cd21 = Number(header["CD2_1"] || 0);
+      cd22 = Number(header["CD2_2"]);
+    } else {
+      const cdelt1 = Number.isFinite(Number(header["CDELT1"])) ? Number(header["CDELT1"]) : 1.0;
+      const cdelt2 = Number.isFinite(Number(header["CDELT2"])) ? Number(header["CDELT2"]) : 1.0;
+      const pc11 = Number.isFinite(Number(header["PC1_1"])) ? Number(header["PC1_1"]) : 1.0;
+      const pc12 = Number.isFinite(Number(header["PC1_2"])) ? Number(header["PC1_2"]) : 0.0;
+      const pc21 = Number.isFinite(Number(header["PC2_1"])) ? Number(header["PC2_1"]) : 0.0;
+      const pc22 = Number.isFinite(Number(header["PC2_2"])) ? Number(header["PC2_2"]) : 1.0;
+      cd11 = cdelt1 * pc11;
+      cd12 = cdelt1 * pc12;
+      cd21 = cdelt2 * pc21;
+      cd22 = cdelt2 * pc22;
+    }
+
+    const det = cd11 * cd22 - cd12 * cd21;
+    if (!Number.isFinite(det) || Math.abs(det) < 1e-18) return null;
+
+    const inv11 = cd22 / det;
+    const inv12 = -cd12 / det;
+    const inv21 = -cd21 / det;
+    const inv22 = cd11 / det;
+
+    const deg2rad = Math.PI / 180;
+    const rad2deg = 180 / Math.PI;
+    const ra0 = crval1 * deg2rad;
+    const dec0 = crval2 * deg2rad;
+    const sinDec0 = Math.sin(dec0);
+    const cosDec0 = Math.cos(dec0);
+
+    return {
+      crval1,
+      crval2,
+      crpix1,
+      crpix2,
+      cd11,
+      cd12,
+      cd21,
+      cd22,
+      pixToWorld(px0, py0) {
+        // 0-based FITS array pixel -> 1-based FITS WCS pixel
+        const u = px0 + 1 - crpix1;
+        const v = py0 + 1 - crpix2;
+        const xi = (cd11 * u + cd12 * v) * deg2rad;
+        const eta = (cd21 * u + cd22 * v) * deg2rad;
+        const rho = Math.hypot(xi, eta);
+        if (rho < 1e-12) return { ra: crval1, dec: crval2 };
+        const c = Math.atan(rho);
+        const sinC = Math.sin(c);
+        const cosC = Math.cos(c);
+        const dec = Math.asin(Math.max(-1, Math.min(1, cosC * sinDec0 + (eta * sinC * cosDec0) / rho)));
+        const ra = ra0 + Math.atan2(xi * sinC, rho * cosDec0 * cosC - eta * sinDec0 * sinC);
+        return {
+          ra: ((ra * rad2deg) % 360 + 360) % 360,
+          dec: dec * rad2deg
+        };
+      },
+      worldToPix(raDeg, decDeg) {
+        const ra = raDeg * deg2rad;
+        const dec = decDeg * deg2rad;
+        const dRa = ra - ra0;
+        const sinDec = Math.sin(dec);
+        const cosDec = Math.cos(dec);
+        const cosDRa = Math.cos(dRa);
+        const denom = sinDec * sinDec0 + cosDec * cosDec0 * cosDRa;
+        if (denom <= 1e-9) return null;
+        const xiDeg = ((cosDec * Math.sin(dRa)) / denom) * rad2deg;
+        const etaDeg = ((sinDec * cosDec0 - cosDec * sinDec0 * cosDRa) / denom) * rad2deg;
+        const u = inv11 * xiDeg + inv12 * etaDeg;
+        const v = inv21 * xiDeg + inv22 * etaDeg;
+        return {
+          px: u + crpix1 - 1,
+          py: v + crpix2 - 1
+        };
+      }
+    };
+  },
+
+  /**
+   * Align a real FITS observation onto a North-Up, East-Left celestial grid centered at (centerRa, centerDec).
+   * Eliminates spacecraft roll flips across 6-month SPHEREx intervals without creating synthetic time frames.
+   */
+  resampleFitsToSkyGrid(parsedFits, centerRa, centerDec, sizeDeg = 0.1, outDim = 60) {
+    if (!parsedFits || !parsedFits.valid) return null;
+    const imgHdu = parsedFits.hdus?.["IMAGE"];
+    if (!imgHdu || !imgHdu.matrix) return null;
+
+    const wcs = this.parseWcsFromHeader(imgHdu.header);
+    const wIn = parsedFits.width;
+    const hIn = parsedFits.height;
+    const srcImg = imgHdu.matrix;
+    const srcZod = parsedFits.hdus?.["ZODI"]?.matrix || null;
+    const srcFlg = parsedFits.hdus?.["FLAGS"]?.matrix || null;
+
+    const outImg = new Float32Array(outDim * outDim);
+    const outZod = srcZod ? new Float32Array(outDim * outDim) : null;
+    const outFlg = srcFlg ? new Uint32Array(outDim * outDim) : null;
+    outImg.fill(NaN);
+    if (outZod) outZod.fill(NaN);
+
+    const degPerPx = sizeDeg / outDim;
+    const cosDec = Math.max(0.1, Math.cos((centerDec * Math.PI) / 180));
+
+    for (let y = 0; y < outDim; y++) {
+      // Top of canvas = North (+Dec)
+      const skyDec = centerDec + ((outDim - 1) / 2 - y) * degPerPx;
+      for (let x = 0; x < outDim; x++) {
+        // Left of canvas = East (+RA)
+        const skyRa = ((centerRa - (x - (outDim - 1) / 2) * (degPerPx / cosDec)) % 360 + 360) % 360;
+        const outIdx = y * outDim + x;
+
+        let ix, iy;
+        if (wcs) {
+          const p = wcs.worldToPix(skyRa, skyDec);
+          if (!p) continue;
+          ix = Math.round(p.px);
+          iy = Math.round(p.py);
+        } else {
+          ix = Math.round((x / (outDim - 1)) * (wIn - 1));
+          iy = Math.round(((outDim - 1 - y) / (outDim - 1)) * (hIn - 1));
+        }
+
+        if (ix >= 0 && ix < wIn && iy >= 0 && iy < hIn) {
+          const inIdx = iy * wIn + ix;
+          outImg[outIdx] = srcImg[inIdx];
+          if (outZod && srcZod) outZod[outIdx] = srcZod[inIdx];
+          if (outFlg && srcFlg) outFlg[outIdx] = srcFlg[inIdx];
+        }
+      }
+    }
+
+    return {
+      valid: true,
+      isAlignedGrid: true,
+      wcsAligned: !!wcs,
+      width: outDim,
+      height: outDim,
+      detector: parsedFits.detector,
+      image: outImg,
+      zodi: outZod,
+      flags: outFlg,
+      p10: parsedFits.p10,
+      p50: parsedFits.p50,
+      p99: parsedFits.p99,
+      meanZodi: parsedFits.meanZodi,
+      centerPeakFlux: parsedFits.centerPeakFlux,
+      snr: parsedFits.snr,
+      dateObs: parsedFits.dateObs,
+      centerFlagHex: parsedFits.centerFlagHex
+    };
+  },
+
+  /**
+   * Compute real pixel-wise Difference Matrix I_diff = I_epoch - I_baseline on aligned grids.
+   */
+  computeDifferenceMatrix(gridCurrent, gridBaseline, subtractZodi = true) {
+    if (!gridCurrent?.valid || !gridBaseline?.valid) return null;
+    const w = Math.min(gridCurrent.width, gridBaseline.width);
+    const h = Math.min(gridCurrent.height, gridBaseline.height);
+    const count = w * h;
+
+    const imgC = gridCurrent.isAlignedGrid ? gridCurrent.image : gridCurrent.hdus?.["IMAGE"]?.matrix;
+    const imgB = gridBaseline.isAlignedGrid ? gridBaseline.image : gridBaseline.hdus?.["IMAGE"]?.matrix;
+    const zodC = gridCurrent.isAlignedGrid ? gridCurrent.zodi : gridCurrent.hdus?.["ZODI"]?.matrix;
+    const zodB = gridBaseline.isAlignedGrid ? gridBaseline.zodi : gridBaseline.hdus?.["ZODI"]?.matrix;
+    if (!imgC || !imgB) return null;
+
+    const rawDiff = new Float32Array(count);
+    const validVals = [];
+    for (let y = 0; y < h; y++) {
+      const rC = gridCurrent.isAlignedGrid ? y : gridCurrent.height - 1 - y;
+      const rB = gridBaseline.isAlignedGrid ? y : gridBaseline.height - 1 - y;
+      for (let x = 0; x < w; x++) {
+        const iC = rC * gridCurrent.width + x;
+        const iB = rB * gridBaseline.width + x;
+        let vC = imgC[iC];
+        let vB = imgB[iB];
+        if (subtractZodi && zodC && Number.isFinite(zodC[iC])) vC -= zodC[iC];
+        if (subtractZodi && zodB && Number.isFinite(zodB[iB])) vB -= zodB[iB];
+        const d = vC - vB;
+        const outIdx = y * w + x;
+        rawDiff[outIdx] = d;
+        if (Number.isFinite(d)) validVals.push(d);
+      }
+    }
+
+    if (!validVals.length) return null;
+    validVals.sort((a, b) => a - b);
+    const medianOff = validVals[Math.floor(validVals.length * 0.5)] || 0;
+
+    let sumSq = 0;
+    let peakPos = -Infinity;
+    let peakNeg = Infinity;
+    let posX = 0, posY = 0, negX = 0, negY = 0;
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = y * w + x;
+        if (!Number.isFinite(rawDiff[idx])) continue;
+        const c = rawDiff[idx] - medianOff;
+        rawDiff[idx] = c;
+        sumSq += c * c;
+        if (c > peakPos) { peakPos = c; posX = x; posY = y; }
+        if (c < peakNeg) { peakNeg = c; negX = x; negY = y; }
+      }
+    }
+
+    const rms = Math.sqrt(sumSq / validVals.length);
+    const pLow = validVals[Math.floor(validVals.length * 0.02)] - medianOff;
+    const pHigh = validVals[Math.floor(validVals.length * 0.98)] - medianOff;
+    const scaleMax = Math.max(rms * 4.5, Math.abs(pHigh), Math.abs(pLow), 1.0);
+    const sepPx = Math.hypot(posX - negX, posY - negY);
+
+    return {
+      valid: true,
+      width: w,
+      height: h,
+      diff: rawDiff,
+      rms: +rms.toFixed(3),
+      scaleMax,
+      peakPos: +peakPos.toFixed(2),
+      peakNeg: +peakNeg.toFixed(2),
+      posXY: [posX, posY],
+      negXY: [negX, negY],
+      sepPx: +sepPx.toFixed(2)
+    };
+  },
+
+  /**
+   * Render I_diff diverging dipole colormap (Cyan = negative/old position, Black = 0, Amber-Red/White = positive/new position).
+   */
+  renderDiffToOffscreen(diffObj, options = {}) {
+    if (!diffObj || !diffObj.valid) return null;
+    const { contrast = 1.15 } = options;
+    const { width: w, height: h, diff, scaleMax } = diffObj;
+
+    const offCanvas = document.createElement("canvas");
+    offCanvas.width = w;
+    offCanvas.height = h;
+    const offCtx = offCanvas.getContext("2d");
+    const imgData = offCtx.createImageData(w, h);
+    const data = imgData.data;
+
+    const gain = Math.max(0.4, contrast);
+    const soft = 2.6 * gain;
+
+    for (let i = 0; i < w * h; i++) {
+      const v = diff[i];
+      const out = i * 4;
+      if (!Number.isFinite(v)) {
+        data[out] = 4;
+        data[out + 1] = 8;
+        data[out + 2] = 16;
+        data[out + 3] = 255;
+        continue;
+      }
+
+      const norm = Math.asinh((v / scaleMax) * soft) / Math.asinh(soft);
+      const mag = Math.min(1, Math.abs(norm));
+      if (norm >= 0) {
+        // Positive flux (new position / brightening): Black -> Amber-Red -> White
+        data[out] = Math.min(255, Math.round(Math.pow(mag, 0.65) * 255));
+        data[out + 1] = Math.min(255, Math.round(Math.pow(mag, 1.35) * 200));
+        data[out + 2] = Math.min(255, Math.round(Math.pow(mag, 2.4) * 220));
+      } else {
+        // Negative flux (departed position / dimming): Black -> Deep Cyan -> Bright Ice Blue
+        data[out] = Math.min(255, Math.round(Math.pow(mag, 2.2) * 140));
+        data[out + 1] = Math.min(255, Math.round(Math.pow(mag, 0.85) * 215));
+        data[out + 2] = Math.min(255, Math.round(Math.pow(mag, 0.65) * 255));
+      }
+      data[out + 3] = 255;
+    }
+
+    offCtx.putImageData(imgData, 0, 0);
     return offCanvas;
   }
 };

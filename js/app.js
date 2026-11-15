@@ -35,6 +35,9 @@
   let isNameInputDirty = false;
   let isFovExplicitlyChanged = false;
   let isFloatingCardDismissed = false;
+  let motionPlayer = null;
+  let motionLoadedKey = "";
+  let pendingMotionUrlState = null;
 
   function formatCoordPrecision(val) {
     const num = Number(val);
@@ -162,6 +165,11 @@
     dom.fitsZoomTitle = document.getElementById("fitsZoomTitle");
     dom.btnModeSplit = document.getElementById("btnModeSplit");
     dom.btnModeBlink = document.getElementById("btnModeBlink");
+    dom.btnModeMotion = document.getElementById("btnModeMotion");
+    dom.btnOpenMotionPlayer = document.getElementById("btnOpenMotionPlayer");
+    dom.btnDockMotionPlayer = document.getElementById("btnDockMotionPlayer");
+    dom.motionSummaryMini = document.getElementById("motionSummaryMini");
+    dom.zoomMagGroup = document.querySelector(".zoom-mag-group");
     dom.btnMagPills = document.querySelectorAll(".btn-mag-pill");
     dom.blinkControlsWrap = document.getElementById("blinkControlsWrap");
     dom.btnBlinkPlayPause = document.getElementById("btnBlinkPlayPause");
@@ -170,6 +178,7 @@
     dom.fitsZoomBody = document.getElementById("fitsZoomBody");
     dom.viewSplitWrapper = document.getElementById("viewSplitWrapper");
     dom.viewBlinkWrapper = document.getElementById("viewBlinkWrapper");
+    dom.viewMotionWrapper = document.getElementById("viewMotionWrapper");
     dom.wrapSplitT1 = document.getElementById("wrapSplitT1");
     dom.wrapSplitT2 = document.getElementById("wrapSplitT2");
     dom.wrapBlinkMain = document.getElementById("wrapBlinkMain");
@@ -239,6 +248,23 @@
 
     // 2. Render danh sách Curated / Xếp hạng thiên thể yêu thích
     renderCuratedCatalog("all");
+
+    // 2b. Khởi tạo Cosmic Motion Animation Player (P0 #3)
+    if (window.CosmicMotionPlayer) {
+      motionPlayer = new window.CosmicMotionPlayer({
+        getShaderOpts: () => ({
+          subtractZodi: skyEngine ? skyEngine.shader.subtractZodi : true,
+          brightness: skyEngine ? skyEngine.shader.brightness : 0,
+          contrast: skyEngine ? skyEngine.shader.contrast : 1.15
+        }),
+        callbacks: {
+          onEpochChanged: (epoch, parsedFits) => {
+            syncActiveMotionEpochToWorkspace(epoch, parsedFits);
+          }
+        }
+      });
+      motionPlayer.initDOM();
+    }
 
     // 3. Gắn sự kiện cho các nút và thanh trượt
     bindUIEvents();
@@ -519,13 +545,19 @@
         dom.irsaFrameCountBadge.textContent = `${rows.length} Frames (${detSummary})`;
       }
 
-      // Ưu tiên chọn detector khuyên dùng của mục tiêu có sẵn dữ liệu (hoặc mặc định D6)
+      motionLoadedKey = "";
+
+      // Ưu tiên detector từ URL nếu có, sau đó tới detector khuyên dùng của mục tiêu có sẵn dữ liệu (hoặc mặc định D6)
       const prefDets = matchedObj?.recommended_detectors || [6, 5, 4, 3, 2, 1];
       let defaultDet = (matchedObj?.recommended_detectors && matchedObj.recommended_detectors[0]) || 6;
-      for (const d of prefDets) {
-        if (rows.some((r) => r.detector === d)) {
-          defaultDet = d;
-          break;
+      if (pendingMotionUrlState && pendingMotionUrlState.det && rows.some((r) => r.detector === pendingMotionUrlState.det)) {
+        defaultDet = pendingMotionUrlState.det;
+      } else {
+        for (const d of prefDets) {
+          if (rows.some((r) => r.detector === d)) {
+            defaultDet = d;
+            break;
+          }
         }
       }
       if (!rows.some((r) => r.detector === defaultDet)) {
@@ -582,8 +614,40 @@
     renderEpochOptions(dom.epochSelectT1, irsaState.filteredRows, idx1);
     renderEpochOptions(dom.epochSelectT2, irsaState.filteredRows, idx2);
 
+    updateMotionSummaryMini();
     updateBaselineStats();
     triggerDualEpochCutoutFetch();
+
+    // Nếu modal đang ở chế độ Cosmic Motion, nạp lại chuỗi Epoch của Detector mới
+    if (dom.fitsZoomModal && !dom.fitsZoomModal.classList.contains("hidden") && dualViewState.mode === "motion") {
+      ensureMotionSequenceLoaded(true);
+    }
+
+    // Nếu URL ban đầu yêu cầu mở thẳng Cosmic Motion ở Detector này
+    if (pendingMotionUrlState && pendingMotionUrlState.det === detectorNum) {
+      const targetEpoch = pendingMotionUrlState.epoch || 0;
+      pendingMotionUrlState = null;
+      openFitsZoomModal("motion", targetEpoch);
+    }
+  }
+
+  function updateMotionSummaryMini() {
+    if (!dom.motionSummaryMini) return;
+    const rows = irsaState.filteredRows || [];
+    if (!rows.length) {
+      dom.motionSummaryMini.textContent = `D${irsaState.selectedDetector}: 0 real epochs`;
+      return;
+    }
+    const minMjd = rows[0].t_min_mjd || 0;
+    const maxMjd = rows[rows.length - 1].t_min_mjd || 0;
+    const span = Math.max(0, maxMjd - minMjd);
+    let maxGap = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const g = (rows[i].t_min_mjd || 0) - (rows[i - 1].t_min_mjd || 0);
+      if (g > maxGap) maxGap = g;
+    }
+    const gapText = maxGap >= 30 ? ` • Gap ${maxGap.toFixed(0)}d` : "";
+    dom.motionSummaryMini.textContent = `D${irsaState.selectedDetector}: ${rows.length} Real Epochs • Span ${span.toFixed(1)}d${gapText}`;
   }
 
   /**
@@ -688,6 +752,15 @@
       irsaState.parsedFits = irsaState.parsedFits2;
       irsaState.selectedRow = r2;
 
+      if (motionPlayer) {
+        if (irsaState.parsedFits1?.valid) {
+          motionPlayer.fitsCache.set(`${r1.access_url}|${irsaState.queryRa}|${irsaState.queryDec}|${irsaState.cutoutSize}`, irsaState.parsedFits1);
+        }
+        if (irsaState.parsedFits2?.valid) {
+          motionPlayer.fitsCache.set(`${r2.access_url}|${irsaState.queryRa}|${irsaState.queryDec}|${irsaState.cutoutSize}`, irsaState.parsedFits2);
+        }
+      }
+
       refreshRealFitsVisuals();
 
       if (dom.irsaLiveBadge) {
@@ -784,9 +857,13 @@
     dom.hudVariance.textContent = `±${parsed.medianVariance} MJy/sr²`;
     dom.hudSnr.textContent = `${parsed.snr} (N_stars=${parsed.astrometryStars})`;
 
-    // Nếu Modal phóng to & so sánh đối chứng đang mở, cập nhật ngay các Canvas lớn
+    // Nếu Modal phóng to & so sánh đối chứng đang mở, cập nhật ngay các Canvas lớn hoặc Cosmic Motion
     if (dom.fitsZoomModal && !dom.fitsZoomModal.classList.contains("hidden")) {
-      renderDualViewModal();
+      if (dualViewState.mode === "motion" && motionPlayer) {
+        motionPlayer.renderFrame();
+      } else {
+        renderDualViewModal();
+      }
     }
   }
 
@@ -847,7 +924,87 @@
     ctx.restore();
   }
 
-  function openFitsZoomModal(mode = "split") {
+  function ensureMotionSequenceLoaded(forceReload = false, initialEpochIndex = 0) {
+    if (!motionPlayer) return Promise.resolve();
+    const det = irsaState.selectedDetector || 6;
+    const ra = irsaState.targetRa || (skyEngine ? skyEngine.ra : 0);
+    const dec = irsaState.targetDec || (skyEngine ? skyEngine.dec : 0);
+    const size = irsaState.cutoutSize || 0.08;
+    const targetName = (currentObject && currentObject.name) || dom.hudObjectName?.textContent || `RA ${ra.toFixed(3)}°, Dec ${dec.toFixed(3)}°`;
+    const key = `${ra.toFixed(4)}|${dec.toFixed(4)}|${size}|D${det}|${(irsaState.filteredRows || []).length}`;
+
+    if (!forceReload && motionLoadedKey === key && motionPlayer.state.epochs.length > 0) {
+      if (Number.isInteger(initialEpochIndex) && initialEpochIndex >= 0 && initialEpochIndex < motionPlayer.state.epochs.length) {
+        motionPlayer.jumpToEpoch(initialEpochIndex);
+      }
+      return Promise.resolve();
+    }
+
+    motionLoadedKey = key;
+    const preloadedFitsMap = new Map();
+    if (irsaState.epoch1Row && irsaState.parsedFits1) {
+      preloadedFitsMap.set(`${irsaState.epoch1Row.access_url}|${ra}|${dec}|${size}`, irsaState.parsedFits1);
+    }
+    if (irsaState.epoch2Row && irsaState.parsedFits2) {
+      preloadedFitsMap.set(`${irsaState.epoch2Row.access_url}|${ra}|${dec}|${size}`, irsaState.parsedFits2);
+    }
+
+    return motionPlayer.loadSequence({
+      ra,
+      dec,
+      size,
+      detector: det,
+      targetName,
+      fallbackRows: irsaState.filteredRows || [],
+      preloadedFitsMap,
+      initialEpochIndex
+    });
+  }
+
+  function syncActiveMotionEpochToWorkspace(epoch, parsedFits) {
+    if (!epoch) return;
+    if (dom.hudObsTime) {
+      dom.hudObsTime.textContent = epoch.timestamp_utc || `--`;
+    }
+    if (dom.hudEpochBadge && epoch.mjd !== undefined && epoch.mjd !== null) {
+      const epIdx = Number.isInteger(epoch.epoch_index) ? epoch.epoch_index : 0;
+      dom.hudEpochBadge.textContent = `EPOCH ${epIdx + 1}/${motionPlayer ? motionPlayer.state.epochs.length : "?"} • MJD ${Number(epoch.mjd).toFixed(3)}`;
+    }
+    if (parsedFits && parsedFits.stats) {
+      irsaState.parsedFits = parsedFits;
+      const st = parsedFits.stats;
+      if (dom.hudImageFlux && Number.isFinite(st.peakFlux)) {
+        dom.hudImageFlux.textContent = `${st.peakFlux.toFixed(2)} MJy/sr (Peak)`;
+      }
+      if (dom.hudZodiFlux && Number.isFinite(st.zodiBackground)) {
+        dom.hudZodiFlux.textContent = `${st.zodiBackground.toFixed(2)} MJy/sr (Bg)`;
+      }
+      if (dom.hudVariance && Number.isFinite(st.sigma)) {
+        dom.hudVariance.textContent = `±${st.sigma.toFixed(3)} MJy/sr (1σ)`;
+      }
+      if (dom.hudSnr && Number.isFinite(st.snr)) {
+        dom.hudSnr.textContent = `${st.snr.toFixed(1)}σ`;
+      }
+      if (skyEngine && typeof skyEngine.setRealFitsCutout === "function") {
+        skyEngine.setRealFitsCutout(
+          parsedFits,
+          irsaState.targetRa || skyEngine.ra,
+          irsaState.targetDec || skyEngine.dec,
+          irsaState.cutoutSize || 0.08
+        );
+      }
+    }
+    if (skyEngine) {
+      scheduleURLStateUpdate(
+        skyEngine.ra,
+        skyEngine.dec,
+        skyEngine.fov,
+        currentObject ? currentObject.id : "custom"
+      );
+    }
+  }
+
+  function openFitsZoomModal(mode = "split", initialEpochIdx = 0) {
     if (!dom.fitsZoomModal) return;
     dom.fitsZoomModal.classList.remove("hidden");
     document.body.classList.add("modal-open");
@@ -862,45 +1019,83 @@
     if (dom.canvasBlinkMain) { dom.canvasBlinkMain.style.width = ""; dom.canvasBlinkMain.style.height = ""; }
     if (dom.fitsZoomBody) { dom.fitsZoomBody.style.overflow = "hidden"; }
 
-    setDualViewMode(mode);
-    renderDualViewModal();
+    setDualViewMode(mode, initialEpochIdx);
+    if (mode !== "motion") {
+      renderDualViewModal();
+    }
   }
 
   function closeFitsZoomModal() {
     if (!dom.fitsZoomModal) return;
     stopBlinkAnimation();
+    if (motionPlayer) {
+      motionPlayer.deactivate();
+    }
     dom.fitsZoomModal.classList.add("hidden");
     document.body.classList.remove("modal-open");
+    if (skyEngine) {
+      scheduleURLStateUpdate(
+        skyEngine.ra,
+        skyEngine.dec,
+        skyEngine.fov,
+        currentObject ? currentObject.id : "custom"
+      );
+    }
   }
 
-  function setDualViewMode(mode) {
+  function setDualViewMode(mode, initialEpochIdx = 0) {
     dualViewState.mode = mode;
-    if (mode === "split") {
-      if (dom.btnModeSplit) dom.btnModeSplit.classList.add("active");
-      if (dom.btnModeBlink) dom.btnModeBlink.classList.remove("active");
-      if (dom.viewSplitWrapper) dom.viewSplitWrapper.classList.remove("hidden");
-      if (dom.viewBlinkWrapper) dom.viewBlinkWrapper.classList.add("hidden");
-      if (dom.blinkControlsWrap) dom.blinkControlsWrap.classList.add("hidden");
 
+    if (dom.btnModeSplit) dom.btnModeSplit.classList.toggle("active", mode === "split");
+    if (dom.btnModeBlink) dom.btnModeBlink.classList.toggle("active", mode === "blink");
+    if (dom.btnModeMotion) dom.btnModeMotion.classList.toggle("active", mode === "motion");
+
+    if (dom.viewSplitWrapper) dom.viewSplitWrapper.classList.toggle("hidden", mode !== "split");
+    if (dom.viewBlinkWrapper) dom.viewBlinkWrapper.classList.toggle("hidden", mode !== "blink");
+    if (dom.viewMotionWrapper) dom.viewMotionWrapper.classList.toggle("hidden", mode !== "motion");
+
+    if (dom.blinkControlsWrap) dom.blinkControlsWrap.classList.toggle("hidden", mode !== "blink");
+    if (dom.zoomMagGroup) dom.zoomMagGroup.classList.toggle("hidden", mode === "motion");
+
+    if (mode === "split") {
+      if (motionPlayer) motionPlayer.deactivate();
       // Chuyển thanh thông số điểm soi vào nằm giữa 2 tấm ảnh (trước card T2)
       if (dom.fitsZoomSidebar && dom.viewSplitWrapper && dom.cardSplitT2) {
         dom.viewSplitWrapper.insertBefore(dom.fitsZoomSidebar, dom.cardSplitT2);
       }
-
       stopBlinkAnimation();
-    } else {
-      if (dom.btnModeBlink) dom.btnModeBlink.classList.add("active");
-      if (dom.btnModeSplit) dom.btnModeSplit.classList.remove("active");
-      if (dom.viewBlinkWrapper) dom.viewBlinkWrapper.classList.remove("hidden");
-      if (dom.viewSplitWrapper) dom.viewSplitWrapper.classList.add("hidden");
-      if (dom.blinkControlsWrap) dom.blinkControlsWrap.classList.remove("hidden");
-
+      renderDualViewModal();
+    } else if (mode === "blink") {
+      if (motionPlayer) motionPlayer.deactivate();
       // Chuyển thanh thông số điểm soi sang bên phải ảnh Blink
       if (dom.fitsZoomSidebar && dom.viewBlinkWrapper) {
         dom.viewBlinkWrapper.appendChild(dom.fitsZoomSidebar);
       }
-
       startBlinkAnimation();
+      renderDualViewModal();
+    } else if (mode === "motion") {
+      stopBlinkAnimation();
+      const detNum = irsaState.selectedDetector || 6;
+      if (dom.fitsZoomBandBadge) {
+        dom.fitsZoomBandBadge.textContent = `CẢM BIẾN D${detNum} (${getDetectorBandDesc(detNum)})`;
+      }
+      if (dom.fitsZoomTitle) {
+        const objTitle = currentObject?.name || "SPHEREx Target";
+        dom.fitsZoomTitle.textContent = `🎬 Cosmic Motion Animation — ${objTitle}`;
+      }
+      if (motionPlayer) {
+        motionPlayer.activate();
+        ensureMotionSequenceLoaded(false, initialEpochIdx);
+      }
+    }
+
+    if (skyEngine) {
+      scheduleURLStateUpdate(
+        skyEngine.ra,
+        skyEngine.dec,
+        skyEngine.fov,
+        currentObject ? currentObject.id : "custom"
+      );
     }
   }
 
@@ -1437,6 +1632,13 @@
       if (targetId && targetId !== "custom") {
         params.set("target", targetId);
       }
+      if (dom.fitsZoomModal && !dom.fitsZoomModal.classList.contains("hidden") && dualViewState.mode === "motion") {
+        params.set("view", "motion");
+        params.set("det", String(irsaState.selectedDetector || 6));
+        if (motionPlayer) {
+          params.set("epoch", String(motionPlayer.state.currentIndex || 0));
+        }
+      }
 
       const newRelativeUrl = `${window.location.pathname}?${params.toString()}`;
       try {
@@ -1462,6 +1664,16 @@
     const urlFov = params.get("fov");
     const urlBand = params.get("band");
     const urlTarget = params.get("target");
+    const urlView = params.get("view");
+    const urlDet = parseInt(params.get("det"), 10);
+    const urlEpoch = parseInt(params.get("epoch"), 10);
+
+    if (urlView === "motion") {
+      pendingMotionUrlState = {
+        det: Number.isFinite(urlDet) ? urlDet : null,
+        epoch: Number.isFinite(urlEpoch) ? Math.max(0, urlEpoch) : 0
+      };
+    }
 
     if (urlBand) {
       const b = Math.max(1, Math.min(102, parseInt(urlBand, 10) || 42));
@@ -1712,11 +1924,17 @@
     dom.brightnessSlider.addEventListener("input", () => {
       skyEngine.updateShader({ brightness: parseFloat(dom.brightnessSlider.value) });
       if (irsaState.parsedFits) refreshRealFitsVisuals();
+      else if (dom.fitsZoomModal && !dom.fitsZoomModal.classList.contains("hidden") && dualViewState.mode === "motion" && motionPlayer) {
+        motionPlayer.renderFrame();
+      }
     });
 
     dom.contrastSlider.addEventListener("input", () => {
       skyEngine.updateShader({ contrast: parseFloat(dom.contrastSlider.value) });
       if (irsaState.parsedFits) refreshRealFitsVisuals();
+      else if (dom.fitsZoomModal && !dom.fitsZoomModal.classList.contains("hidden") && dualViewState.mode === "motion" && motionPlayer) {
+        motionPlayer.renderFrame();
+      }
     });
 
     // 4b. Sự kiện Dual-Epoch (T1 vs T2) & Band Selector (D1..D6)
@@ -1762,6 +1980,10 @@
       if (currentObject) {
         updateInspectorHUD(currentObject, skyEngine.ra, skyEngine.dec, skyEngine.fov);
       }
+      if (irsaState.parsedFits) refreshRealFitsVisuals();
+      else if (dom.fitsZoomModal && !dom.fitsZoomModal.classList.contains("hidden") && dualViewState.mode === "motion" && motionPlayer) {
+        motionPlayer.renderFrame();
+      }
       showValidationBanner(
         "✨ Auto-Contrast: Đã tự động khử nhiễu nền bụi Hoàng Đạo (ZODI) và tối ưu Histogram độ tương phản!",
         "info"
@@ -1772,6 +1994,10 @@
       skyEngine.updateShader({ subtractZodi: dom.toggleZodi.checked });
       if (currentObject) {
         updateInspectorHUD(currentObject, skyEngine.ra, skyEngine.dec, skyEngine.fov);
+      }
+      if (irsaState.parsedFits) refreshRealFitsVisuals();
+      else if (dom.fitsZoomModal && !dom.fitsZoomModal.classList.contains("hidden") && dualViewState.mode === "motion" && motionPlayer) {
+        motionPlayer.renderFrame();
       }
     });
 
@@ -1941,12 +2167,21 @@
       dom.fitsZoomBackdrop.addEventListener("click", closeFitsZoomModal);
     }
 
-    // 4. Chuyển đổi giữa chế độ Side-by-Side (Split) và Chớp nháy (Blink)
+    // 4. Chuyển đổi giữa chế độ Side-by-Side (Split), Chớp nháy (Blink) và Cosmic Motion Animation
     if (dom.btnModeSplit) {
       dom.btnModeSplit.addEventListener("click", () => setDualViewMode("split"));
     }
     if (dom.btnModeBlink) {
       dom.btnModeBlink.addEventListener("click", () => setDualViewMode("blink"));
+    }
+    if (dom.btnModeMotion) {
+      dom.btnModeMotion.addEventListener("click", () => setDualViewMode("motion"));
+    }
+    if (dom.btnOpenMotionPlayer) {
+      dom.btnOpenMotionPlayer.addEventListener("click", () => openFitsZoomModal("motion"));
+    }
+    if (dom.btnDockMotionPlayer) {
+      dom.btnDockMotionPlayer.addEventListener("click", () => openFitsZoomModal("motion"));
     }
 
     // 5. Điều khiển Blink Play/Pause và Tốc độ nhấp nháy
@@ -1978,14 +2213,16 @@
       dom.wrapBlinkMain.addEventListener("mouseleave", handleCrosshairMouseLeave);
     }
 
-    // 8. Phím tắt toàn cục: ESC để đóng, Space để tạm dừng/bật Blink
+    // 8. Phím tắt toàn cục: ESC để đóng, Space để tạm dừng/bật Blink hoặc Cosmic Motion
     document.addEventListener("keydown", (e) => {
       if (dom.fitsZoomModal && !dom.fitsZoomModal.classList.contains("hidden")) {
         if (e.key === "Escape") {
           closeFitsZoomModal();
         } else if (e.code === "Space" && (e.target === document.body || e.target === dom.fitsZoomModal)) {
           e.preventDefault();
-          if (dualViewState.mode === "blink") {
+          if (dualViewState.mode === "motion" && motionPlayer) {
+            motionPlayer.togglePlay();
+          } else if (dualViewState.mode === "blink") {
             toggleBlinkPlayPause();
           } else {
             setDualViewMode("blink");

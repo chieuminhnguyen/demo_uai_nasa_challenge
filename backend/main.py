@@ -16,6 +16,8 @@ from fastapi.staticfiles import StaticFiles
 from backend.targets import TARGETS, propagate_proper_motion, resolve_target_by_name
 from backend.services.irsa_client import (
     analyze_fits_with_astropy,
+    build_observation_epochs,
+    compute_fits_difference_astropy,
     fetch_irsa_fits_cutout,
     load_spherex_100_samples,
     parse_sia_csv_rows,
@@ -248,6 +250,67 @@ async def irsa_astropy_analyze(
         )
         analysis = analyze_fits_with_astropy(fits_bytes, target_ra=ra, target_dec=dec)
         return JSONResponse(analysis)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/api/irsa/epochs")
+async def irsa_observation_epochs(
+    ra: float = Query(default=269.446294, ge=0.0, le=360.0),
+    dec: float = Query(default=4.767881, ge=-90.0, le=90.0),
+    radius: float = Query(default=0.05, ge=0.005, le=2.0),
+    detector: Optional[int] = Query(default=None, ge=1, le=6),
+    size: float = Query(default=0.1, ge=0.01, le=1.0),
+):
+    """
+    Return the chronologically sorted sequence of real Observation Epochs
+    (epoch_id, timestamp_utc, mjd, delta_t_days, band, cutout_url, data_gaps)
+    for Cosmic Motion Animation without any synthetic frame interpolation.
+    """
+    try:
+        csv_text = await query_irsa_sia_csv(ra=ra, dec=dec, radius=radius)
+        payload = build_observation_epochs(
+            csv_text=csv_text,
+            ra=ra,
+            dec=dec,
+            detector=detector,
+            size=size,
+        )
+        return JSONResponse(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/api/irsa/diff")
+async def irsa_fits_difference(
+    access_url_1: str = Query(..., description="Baseline epoch NASA IRSA access_url"),
+    access_url_2: str = Query(..., description="Target epoch NASA IRSA access_url"),
+    ra: float = Query(default=269.446294, ge=0.0, le=360.0),
+    dec: float = Query(default=4.767881, ge=-90.0, le=90.0),
+    size: float = Query(default=0.1, ge=0.01, le=1.0),
+    subtract_zodi: bool = Query(default=True),
+):
+    """
+    Compute a WCS-aligned difference image I_diff = I_2_aligned - I_1
+    from two real SPHEREx Level-2 FITS cutouts using Astropy.
+    """
+    import asyncio
+
+    try:
+        (bytes1, _), (bytes2, _) = await asyncio.gather(
+            fetch_irsa_fits_cutout(access_url_1, ra=ra, dec=dec, size=size, mode="compact"),
+            fetch_irsa_fits_cutout(access_url_2, ra=ra, dec=dec, size=size, mode="compact"),
+        )
+        diff_res = compute_fits_difference_astropy(
+            bytes1,
+            bytes2,
+            target_ra=ra,
+            target_dec=dec,
+            subtract_zodi=subtract_zodi,
+        )
+        return JSONResponse(diff_res)
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve)) from ve
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

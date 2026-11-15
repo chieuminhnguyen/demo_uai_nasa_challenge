@@ -223,6 +223,10 @@
           <input id="bandSlider" type="range" min="1" max="102" value="42" />
         </div>
 
+        <button id="btnDockMotionPlayer" type="button" class="btn-secondary btn-dock-motion" title="Mở Cosmic Motion Animation (Phát chuỗi Epoch thực tế)">
+          🎬 Cosmic Motion
+        </button>
+
         <div id="hoverCoordsText" class="hover-coords-bar">
           Con trỏ: Kéo chuột để Pan • Lăn chuột để Zoom • Nhấp đúp để chọn điểm
         </div>
@@ -300,6 +304,14 @@
             <canvas id="cutoutCanvasT2" width="140" height="140"></canvas>
             <span id="epochDateLabelT2" class="preview-date-label">--</span>
           </div>
+        </div>
+
+        <!-- Nút khởi chạy Cosmic Motion Animation (P0: Chuỗi Epoch thực tế) -->
+        <div class="motion-launch-bar">
+          <button type="button" id="btnOpenMotionPlayer" class="btn-launch-motion" title="Phát hoạt ảnh chuyển động qua toàn bộ chuỗi Observation Epochs thực tế (Blink / Cross-Fade / I_diff / Export WebM & GIF)">
+            🎬 COSMIC MOTION ANIMATION (ALL EPOCHS)
+          </button>
+          <span id="motionSummaryMini" class="motion-summary-mini">Chờ dữ liệu Epoch...</span>
         </div>
 
         <!-- Tóm tắt thiên thể đang chọn -->
@@ -498,6 +510,13 @@
               <span class="btn-mode-desc">Chớp tắt bắt chuyển động như Clyde Tombaugh</span>
             </div>
           </button>
+
+          <button type="button" id="btnModeMotion" class="btn-mode-card btn-mode-motion">
+            <div class="btn-mode-texts">
+              <span class="btn-mode-title">3. COSMIC MOTION</span>
+              <span class="btn-mode-desc">Phát chuỗi Epoch thực • Blink / Cross-Fade / Export</span>
+            </div>
+          </button>
         </div>
 
         <!-- Bộ phóng đại quang học (Magnification Pills) -->
@@ -592,17 +611,147 @@
           </div>
         </div>
 
+        <!-- VIEW C: COSMIC MOTION ANIMATION PLAYER (CHUỖI EPOCH THỰC TẾ) -->
+        <div id="viewMotionWrapper" class="motion-stage-wrap hidden">
+          <!-- Cột Trái: Canvas chính + Dual Time Sliders -->
+          <div class="motion-player-main">
+            <div id="motionCrossfadeWarning" class="motion-crossfade-warning hidden">
+              ⚠️ VISUAL CROSS-FADE (NON-OBSERVATIONAL TRANSITION) — Alpha blend chỉ dùng hỗ trợ thị giác, không phải khung hình quan sát thật
+            </div>
+
+            <div class="motion-canvas-box">
+              <canvas id="canvasMotionMain" width="540" height="540"></canvas>
+            </div>
+
+            <!-- Thanh điều khiển phát + Dual Time Sliders -->
+            <div class="motion-timeline-panel">
+              <div class="motion-transport-row">
+                <div class="motion-transport-btns">
+                  <button type="button" id="btnMotionPrev" class="btn-motion-ctrl" title="Epoch trước">⏮ Prev</button>
+                  <button type="button" id="btnMotionPlayPause" class="btn-motion-ctrl btn-motion-play" title="Phát / Tạm dừng (Space)">▶ Play</button>
+                  <button type="button" id="btnMotionNext" class="btn-motion-ctrl" title="Epoch kế tiếp">Next ⏭</button>
+                  <button type="button" id="btnMotionLoop" class="btn-motion-ctrl active" title="Lặp lại chuỗi Epoch">🔁 Loop: ON</button>
+                </div>
+                <span id="motionLoadProgress" class="motion-load-progress">⏳ Ready...</span>
+              </div>
+
+              <!-- SLIDER 1: PHYSICAL TIMELINE (TỶ LỆ MJD THỰC TẾ & DATA GAPS) -->
+              <div class="motion-slider-block">
+                <div class="motion-slider-head">
+                  <span class="motion-slider-title">📅 1. PHYSICAL TIMELINE (Tỷ lệ MJD thực tế — Hiện rõ Data Gaps ~6 tháng)</span>
+                  <span id="motionTimelineSpanLabel" class="motion-slider-meta">--</span>
+                </div>
+                <div class="motion-physical-wrap">
+                  <canvas id="motionPhysicalTimeline" width="620" height="44"></canvas>
+                  <div id="motionTimelineTooltip" class="motion-timeline-tooltip hidden"></div>
+                </div>
+              </div>
+
+              <!-- SLIDER 2: DISCRETE STEP SLIDER (CHỈ NHẢY VÀO EPOCH TỒN TẠI, STEP = 1) -->
+              <div class="motion-slider-block">
+                <div class="motion-slider-head">
+                  <span class="motion-slider-title">🎯 2. DISCRETE STEP SLIDER (Chỉ dừng tại Observation Epoch có thật)</span>
+                  <span id="motionDiscreteStepLabel" class="motion-slider-meta">Epoch 1 / 1 (Step = 1)</span>
+                </div>
+                <input id="motionDiscreteSlider" type="range" min="0" max="0" step="1" value="0" class="motion-discrete-range" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Cột Phải: Mode, Playback Speed (Clyde Tombaugh), Telemetry HUD & Export WebM/GIF -->
+          <aside class="motion-sidebar">
+            <div class="motion-panel-card">
+              <div class="motion-card-title">🎬 CHẾ ĐỘ CHUYỂN CẢNH (NO INTERPOLATION)</div>
+              <div class="motion-mode-toggle-row">
+                <button type="button" id="btnMotionModeBlink" class="btn-motion-mode active" title="Nhảy trực tiếp 100% giữa các khung hình quan sát thật">
+                  ⚡ Blink (100% Real)
+                </button>
+                <button type="button" id="btnMotionModeCrossfade" class="btn-motion-mode" title="Pha alpha 35% cuối chu kỳ (kèm cảnh báo)">
+                  🌓 Cross-Fade (35%)
+                </button>
+              </div>
+              <div class="motion-layer-toggle-row">
+                <button type="button" id="btnMotionToggleDiff" class="btn-motion-toggle" title="Hiển thị ảnh hiệu số I_diff = I(Epoch_i) - I(Baseline)">
+                  🔬 I_diff Overlay
+                </button>
+                <button type="button" id="btnMotionToggleWcs" class="btn-motion-toggle active" title="Căn chỉnh WCS North-Up East-Left chống lật góc 180°">
+                  🧭 WCS North-Up: ON
+                </button>
+              </div>
+            </div>
+
+            <div class="motion-panel-card">
+              <div class="motion-card-title">
+                ⏱️ TỐC ĐỘ PHÁT (TOMBAUGH STANDARD)
+                <span id="motionSpeedLabel" class="motion-speed-badge">2.0 Hz (2.0x)</span>
+              </div>
+              <div class="motion-speed-pills">
+                <button type="button" class="btn-motion-speed-pill" data-hz="0.5">0.5x</button>
+                <button type="button" class="btn-motion-speed-pill" data-hz="1.0">1x (1Hz)</button>
+                <button type="button" class="btn-motion-speed-pill active" data-hz="2.0">2x (2Hz)</button>
+                <button type="button" class="btn-motion-speed-pill" data-hz="3.0">3 Hz</button>
+                <button type="button" class="btn-motion-speed-pill" data-hz="4.0">4x</button>
+              </div>
+              <input id="motionSpeedSlider" type="range" min="0.5" max="4.0" step="0.5" value="2.0" class="motion-speed-range" />
+            </div>
+
+            <div class="motion-panel-card motion-telemetry-card">
+              <div class="motion-card-title">📡 HUD TELEMETRY THỜI GIAN THỰC</div>
+              <div class="motion-hud-row">
+                <span class="motion-hud-lbl">OBSERVATION UTC</span>
+                <span id="motionHudUtc" class="motion-hud-val">--</span>
+              </div>
+              <div class="motion-hud-row">
+                <span class="motion-hud-lbl">MODIFIED JULIAN DATE</span>
+                <span id="motionHudMjd" class="motion-hud-val">--</span>
+              </div>
+              <div class="motion-hud-row">
+                <span class="motion-hud-lbl">BAND / COLLECTION</span>
+                <span id="motionHudBand" class="motion-hud-val">--</span>
+              </div>
+              <div class="motion-hud-divider"></div>
+              <div class="motion-hud-row">
+                <span class="motion-hud-lbl">PLAYBACK RATE (ANIMATION)</span>
+                <span id="motionHudPlaybackRate" class="motion-hud-val val-cyan">2.0 Hz (2.0 epochs/s)</span>
+              </div>
+              <div class="motion-hud-row">
+                <span class="motion-hud-lbl">PHYSICAL MOTION Δt (REAL)</span>
+                <span id="motionHudPhysicalDt" class="motion-hud-val val-green">0.00 days</span>
+              </div>
+              <div class="motion-hud-row">
+                <span class="motion-hud-lbl">APPARENT MOTION / PM</span>
+                <span id="motionHudApparentMotion" class="motion-hud-val">--</span>
+              </div>
+              <div class="motion-hud-row">
+                <span class="motion-hud-lbl">I_diff DIPOLE TELEMETRY</span>
+                <span id="motionHudDiffStats" class="motion-hud-val">Off (Raw Real Epochs)</span>
+              </div>
+            </div>
+
+            <div class="motion-panel-card">
+              <div class="motion-card-title">💾 XUẤT VIDEO / ẢNH ĐỘNG (CANVAS STREAM)</div>
+              <div class="motion-export-row">
+                <button type="button" id="btnMotionExportWebm" class="btn-motion-export">🎥 Export WebM</button>
+                <button type="button" id="btnMotionExportGif" class="btn-motion-export">🎞️ Export GIF</button>
+              </div>
+              <div id="motionExportStatus" class="motion-export-status">Sẵn sàng xuất trực tiếp từ HTML5 Canvas</div>
+            </div>
+          </aside>
+        </div>
+
       </div>
 
     </div>
   </div>
 
   <!-- Scripts -->
-  <script src="js/curated-data.js?v=2.4"></script>
-  <script src="js/spherex-100-samples.js?v=2.4"></script>
-  <script src="js/validator.js?v=2.4"></script>
-  <script src="js/fits-parser.js?v=2.4"></script>
-  <script src="js/sky-engine.js?v=2.4"></script>
-  <script src="js/app.js?v=2.4"></script>
+  <script src="js/curated-data.js?v=2.5"></script>
+  <script src="js/spherex-100-samples.js?v=2.5"></script>
+  <script src="js/validator.js?v=2.5"></script>
+  <script src="js/fits-parser.js?v=2.5"></script>
+  <script src="js/gif-encoder.js?v=2.5"></script>
+  <script src="js/cosmic-motion.js?v=2.5"></script>
+  <script src="js/sky-engine.js?v=2.5"></script>
+  <script src="js/app.js?v=2.5"></script>
 </body>
 </html>
