@@ -3,3 +3,7 @@ cache/
 backend/cache/
 __pycache__/
 *.pyc
+.venv/
+backend/.venv/
+node_modules/
+

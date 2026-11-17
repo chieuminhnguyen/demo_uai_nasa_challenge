@@ -12,9 +12,20 @@ import io
 import json
 import math
 import re
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote
+
+# Ensure both project root and backend directory are in sys.path
+_current_file = Path(__file__).resolve()
+_services_dir = _current_file.parent
+_backend_dir = _services_dir.parent
+_root_dir = _backend_dir.parent
+
+for _p in [str(_root_dir), str(_backend_dir)]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 import httpx
 import numpy as np
@@ -22,7 +33,10 @@ from astropy.io import ascii, fits
 from astropy.time import Time
 from astropy.wcs import WCS
 
-from backend.targets import TARGETS, propagate_proper_motion
+try:
+    from backend.targets import TARGETS, propagate_proper_motion
+except ImportError:
+    from targets import TARGETS, propagate_proper_motion
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 BACKEND_CACHE_DIR = ROOT_DIR / "backend" / "cache"

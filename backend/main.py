@@ -5,26 +5,50 @@ Source Archive: https://irsa.ipac.caltech.edu/Missions/spherex.html
 """
 
 from __future__ import annotations
+import sys
 from pathlib import Path
 from typing import Optional
+
+# Ensure both project root and backend directory are in sys.path
+_current_file = Path(__file__).resolve()
+_backend_dir = _current_file.parent
+_root_dir = _backend_dir.parent
+
+for _p in [str(_root_dir), str(_backend_dir)]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend.targets import TARGETS, propagate_proper_motion, resolve_target_by_name
-from backend.services.irsa_client import (
-    analyze_fits_with_astropy,
-    build_observation_epochs,
-    compute_fits_difference_astropy,
-    fetch_irsa_fits_cutout,
-    load_spherex_100_samples,
-    parse_sia_csv_rows,
-    query_irsa_sia_csv,
-    resolve_name_astronomical,
-    reverse_lookup_simbad,
-)
+try:
+    from backend.targets import TARGETS, propagate_proper_motion, resolve_target_by_name
+    from backend.services.irsa_client import (
+        analyze_fits_with_astropy,
+        build_observation_epochs,
+        compute_fits_difference_astropy,
+        fetch_irsa_fits_cutout,
+        load_spherex_100_samples,
+        parse_sia_csv_rows,
+        query_irsa_sia_csv,
+        resolve_name_astronomical,
+        reverse_lookup_simbad,
+    )
+except ImportError:
+    from targets import TARGETS, propagate_proper_motion, resolve_target_by_name
+    from services.irsa_client import (
+        analyze_fits_with_astropy,
+        build_observation_epochs,
+        compute_fits_difference_astropy,
+        fetch_irsa_fits_cutout,
+        load_spherex_100_samples,
+        parse_sia_csv_rows,
+        query_irsa_sia_csv,
+        resolve_name_astronomical,
+        reverse_lookup_simbad,
+    )
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
